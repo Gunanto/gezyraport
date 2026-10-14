@@ -38,6 +38,13 @@
   </div>
   <div class="card">
     <h3>Daftar Guru</h3>
+    <div class="toolbar" style="margin-bottom:.6rem; flex-wrap:wrap; gap:.4rem">
+      <button class="btn small" type="button" id="btnTemplateCsv">📄 Template CSV</button>
+      <button class="btn small" type="button" id="btnExportCsv">📤 Export CSV</button>
+      <button class="btn small gold" type="button" id="btnImportCsv">📥 Import CSV</button>
+      <input type="file" id="fileCsv" accept=".csv,text/csv" class="hidden">
+    </div>
+    <p class="muted" style="font-size:12px; margin:.2rem 0 .8rem">Import dicocokkan via <b>username</b> — sudah ada → diperbarui, baru → dibuat (password = username bila dikosongkan). Kolom <b>mapel</b> (kode, pisah <b>;</b>) dan <b>kelas</b> (nama, pisah ;) bila diisi akan <b>menggantikan</b> penugasan mengajar guru tersebut.</p>
     <div style="overflow-x:auto">
     <table class="data" id="tabelGuru">
       <thead><tr><th>Nama</th><th>NIP</th><th>Username</th><th>Peran</th><th>Mengajar</th><th>Aksi</th></tr></thead>
@@ -202,6 +209,32 @@ function hapusAjar(i) { ajarList.splice(i, 1); renderAjar(); }
   const _bukaAjar = bukaAjar;
   bukaAjar = async (id) => { document.getElementById("panelAjar").style.display = ""; await _bukaAjar(id); };
   window.bukaAjar = bukaAjar; window.mulaiEdit = mulaiEdit; window.hapus = hapus; window.hapusAjar = hapusAjar;
+  document.getElementById("btnTemplateCsv").addEventListener("click", () => {
+    location.href = "/api/admin/guru/template";
+  });
+  document.getElementById("btnExportCsv").addEventListener("click", () => {
+    location.href = "/api/admin/guru/export";
+  });
+  document.getElementById("btnImportCsv").addEventListener("click", () => {
+    document.getElementById("fileCsv").click();
+  });
+  document.getElementById("fileCsv").addEventListener("change", async (ev) => {
+    const f = ev.target.files[0];
+    ev.target.value = "";
+    if (!f) return;
+    const fd = new FormData();
+    fd.append("file", f);
+    const resp = await fetch("/api/admin/guru/import", { method: "POST", body: fd });
+    const r = await resp.json().catch(() => ({}));
+    if (!resp.ok || !r.ok) {
+      showMsg("msg", (r && r.error) || "Gagal import CSV", "error");
+      return;
+    }
+    let info = `Import selesai: ${r.sukses} baris OK (baru: ${r.dibuat}, diperbarui: ${r.diupdate}).`;
+    if (r.gagal && r.gagal.length) info += " Gagal: " + r.gagal.join(" | ");
+    showMsg("msg", info, r.gagal && r.gagal.length ? "error" : "ok");
+    muat();
+  });
   await muatRef();
   await muat();
 })();

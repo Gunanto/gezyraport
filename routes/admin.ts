@@ -570,6 +570,254 @@ admin.put("/guru/:id/ajar", async (c) => {
   return c.json({ ok: true, jumlah: daftar.length });
 });
 
+/* ============ IMPORT/EXPORT CSV GURU ============
+ * Kolom: username,nama,nip,password,is_bk,is_ekskul,is_staf,jabatan,mapel,kelas
+ * - Dicocokkan via username: sudah ada → diperbarui, baru → dibuat
+ * - password: kosong = tidak diubah (guru baru: default = username)
+ * - is_bk/is_ekskul/is_staf: 1/ya/yes/true/y (case-insensitive) = ya
+ * - jabatan wajib bila is_staf = ya
+ * - mapel: kode dipisah ";" ; kelas: nama dipisah ";" → cross product
+ *   MENGGANTIKAN penugasan mengajar lama (hanya bila kolom mapel/kelas ada di file)
+ */
+
+function parseYaCSV(v: unknown): boolean {
+  return ["1", "ya", "yes", "true", "y"].includes(
+    String(v ?? "").trim().toLowerCase()
+  );
+}
+
+const KOLOM_GURU_CSV = [
+  "username",
+  "nama",
+  "nip",
+  "password",
+  "is_bk",
+  "is_ekskul",
+  "is_staf",
+  "jabatan",
+  "mapel",
+  "kelas",
+];
+
+admin.get("/guru/template", (c) => {
+  const lines = [
+    KOLOM_GURU_CSV.join(","),
+    [
+      "budi.santoso",
+      "Budi Santoso",
+      "198001012005011001",
+      "",
+      "0",
+      "0",
+      "0",
+      "",
+      "MTK",
+      "7A;7B",
+    ]
+      .map(csvField)
+      .join(","),
+  ];
+  c.header("Content-Type", "text/csv; charset=utf-8");
+  c.header("Content-Disposition", 'attachment; filename="template-guru.csv"');
+  return c.body("\uFEFF" + lines.join("\n"));
+});
+
+admin.get("/guru/export", (c) => {
+  const rows = db
+    .query(
+      `SELECT u.username, g.nama, g.nip, g.is_bk, g.is_ekskul, g.is_staf, g.jabatan,
+        (SELECT GROUP_CONCAT(kode, ';') FROM
+           (SELECT DISTINCT m.kode AS kode FROM guru_mapel gm
+            JOIN mapel m ON m.id = gm.mapel_id WHERE gm.guru_id = g.id)) AS mapel,
+        (SELECT GROUP_CONCAT(nama, ';') FROM
+           (SELECT DISTINCT k.nama AS nama FROM guru_mapel gm
+            JOIN kelas k ON k.id = gm.kelas_id WHERE gm.guru_id = g.id)) AS kelas
+       FROM guru g JOIN users u ON u.id = g.user_id
+       ORDER BY g.nama`
+    )
+    .all() as any[];
+  const lines = [KOLOM_GURU_CSV.join(",")];
+  for (const r of rows)
+    lines.push(
+      [
+        r.username,
+        r.nama,
+        r.nip ?? "",
+        "",
+        r.is_bk ? "1" : "0",
+        r.is_ekskul ? "1" : "0",
+        r.is_staf ? "1" : "0",
+        r.jabatan ?? "",
+        r.mapel ?? "",
+        r.kelas ?? "",
+      ]
+        .map(csvField)
+        .join(",")
+    );
+  c.header("Content-Type", "text/csv; charset=utf-8");
+  c.header("Content-Disposition", 'attachment; filename="data-guru.csv"');
+  return c.body("\uFEFF" + lines.join("\n"));
+});
+
+admin.post("/guru/import", async (c) => {
+  const body = await c.req.parseBody();
+  const file = body["file"];
+  if (!file || typeof file === "string")
+    return c.json({ error: "File CSV tidak ditemukan" }, 400);
+  const text = await (file as File).text();
+  const rows = parseCSV(text);
+  if (!rows.length) return c.json({ error: "File kosong" }, 400);
+  // petakan kolom via header (case-insensitive); fallback posisi bila tanpa header
+  const idx: Record<string, number> = {};
+  let start = 0;
+  if (/username/i.test(rows[0][0] ?? "")) {
+    start = 1;
+    rows[0].forEach((h, i) => {
+      idx[String(h ?? "").trim().toLowerCase()] = i;
+    });
+  } else {
+    KOLOM_GURU_CSV.forEach((k, i) => {
+      idx[k] = i;
+    });
+  }
+  const col = (r: string[], k: string) =>
+    idx[k] === undefined ? "" : (r[idx[k]] ?? "").trim();
+  const adaKolomTugas = idx["mapel"] !== undefined || idx["kelas"] !== undefined;
+  let sukses = 0,
+    dibuat = 0,
+    diupdate = 0;
+  const gagal: string[] = [];
+  for (let i = start; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r.length || r.every((x) => !(x ?? "").trim())) continue;
+    const no = i + 1;
+    const username = col(r, "username"),
+      nama = col(r, "nama");
+    if (!username || !nama) {
+      gagal.push(`Baris ${no}: username/nama kosong`);
+      continue;
+    }
+    const is_bk = parseYaCSV(col(r, "is_bk")),
+      is_ekskul = parseYaCSV(col(r, "is_ekskul")),
+      is_staf = parseYaCSV(col(r, "is_staf"));
+    const jabatan = col(r, "jabatan") || null;
+    if (is_staf && !jabatan) {
+      gagal.push(`Baris ${no}: jabatan wajib diisi bila staff=ya`);
+      continue;
+    }
+    // validasi mapel & kelas dulu sebelum mengubah apa pun
+    let tugas: Array<[number, number]> | null = null;
+    if (adaKolomTugas) {
+      const kodeMapel = col(r, "mapel")
+        .split(";")
+        .map((x) => x.trim())
+        .filter(Boolean);
+      const namaKelas = col(r, "kelas")
+        .split(";")
+        .map((x) => x.trim())
+        .filter(Boolean);
+      const mapelIds: number[] = [],
+        kelasIds: number[] = [];
+      let batal = false;
+      for (const kd of kodeMapel) {
+        const mm = db
+          .query("SELECT id FROM mapel WHERE LOWER(kode) = LOWER(?)")
+          .get(kd) as any;
+        if (!mm) {
+          gagal.push(`Baris ${no}: kode mapel "${kd}" tidak ditemukan`);
+          batal = true;
+          break;
+        }
+        mapelIds.push(mm.id);
+      }
+      if (!batal)
+        for (const nk of namaKelas) {
+          const kk = db
+            .query("SELECT id FROM kelas WHERE LOWER(nama) = LOWER(?)")
+            .get(nk) as any;
+          if (!kk) {
+            gagal.push(`Baris ${no}: kelas "${nk}" tidak ditemukan`);
+            batal = true;
+            break;
+          }
+          kelasIds.push(kk.id);
+        }
+      if (batal) continue;
+      tugas = [];
+      for (const mid of mapelIds)
+        for (const kid of kelasIds) tugas.push([mid, kid]);
+    }
+    try {
+      const ex = db
+        .query(
+          "SELECT g.id, g.user_id FROM guru g JOIN users u ON u.id = g.user_id WHERE u.username = ?"
+        )
+        .get(username) as any;
+      const nip = col(r, "nip") || null;
+      const pw = col(r, "password");
+      let gid: number;
+      if (ex) {
+        db.query(
+          `UPDATE guru SET nama=?, nip=?, is_bk=?, is_ekskul=?, is_staf=?, jabatan=? WHERE id=?`
+        ).run(
+          nama,
+          nip,
+          is_bk ? 1 : 0,
+          is_ekskul ? 1 : 0,
+          is_staf ? 1 : 0,
+          is_staf ? jabatan : null,
+          ex.id
+        );
+        if (pw)
+          db
+            .query("UPDATE users SET password_hash=? WHERE id=?")
+            .run(await Bun.password.hash(pw), ex.user_id);
+        gid = ex.id;
+        diupdate++;
+      } else {
+        const hash = await Bun.password.hash(pw || username);
+        const ur = db
+          .query(
+            "INSERT INTO users (username, password_hash, role, created_at) VALUES (?,?,?,datetime('now'))"
+          )
+          .run(username, hash, "guru");
+        const gr = db
+          .query(
+            "INSERT INTO guru (user_id, nama, nip, is_bk, is_ekskul, is_staf, jabatan) VALUES (?,?,?,?,?,?,?)"
+          )
+          .run(
+            Number(ur.lastInsertRowid),
+            nama,
+            nip,
+            is_bk ? 1 : 0,
+            is_ekskul ? 1 : 0,
+            is_staf ? 1 : 0,
+            is_staf ? jabatan : null
+          );
+        gid = Number(gr.lastInsertRowid);
+        dibuat++;
+      }
+      if (tugas !== null) {
+        const daftar = tugas;
+        const ganti = db.transaction(() => {
+          db.query("DELETE FROM guru_mapel WHERE guru_id = ?").run(gid);
+          const ins = db.query(
+            "INSERT OR IGNORE INTO guru_mapel (guru_id, mapel_id, kelas_id) VALUES (?,?,?)"
+          );
+          for (const [mid, kid] of daftar) ins.run(gid, mid, kid);
+        });
+        ganti();
+      }
+      sukses++;
+    } catch (e) {
+      gagal.push(
+        `Baris ${no}: gagal menyimpan (${(e as Error)?.message ?? "galat"})`
+      );
+    }
+  }
+  return c.json({ ok: true, sukses, dibuat, diupdate, gagal });
+});
+
 /* ================= DESAIN RAPORT ================= */
 
 admin.get("/desain", (c) => {
