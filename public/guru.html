@@ -44,7 +44,7 @@
       <button class="btn small gold" type="button" id="btnImportCsv">📥 Import CSV</button>
       <input type="file" id="fileCsv" accept=".csv,text/csv" class="hidden">
     </div>
-    <p class="muted" style="font-size:12px; margin:.2rem 0 .8rem">Import bersifat <b>sinkronisasi</b> via <b>username</b> — belum ada → ditambah, berubah → diperbarui, sama persis → diabaikan (password = username bila dikosongkan). Kolom <b>mapel</b> (kode, pisah <b>;</b>) dan <b>kelas</b> (nama, pisah ;) bila diisi akan <b>menggantikan</b> penugasan mengajar guru tersebut. Baris-baris dengan <b>username</b> sama digabung penugasannya (satu baris per mapel boleh). Guru <b>BK</b> (<b>is_bk</b>=1): kolom <b>kelas</b> = kelas yang ditanganinya untuk <b>Catatan BK</b> (bukan input nilai; kolom <b>mapel</b> diabaikan). Di halaman Catatan BK ia hanya melihat kelas-kelas tersebut.</p>
+    <p class="muted" style="font-size:12px; margin:.2rem 0 .8rem">Import bersifat <b>sinkronisasi</b> via <b>username</b> — belum ada → ditambah, berubah → diperbarui, sama persis → diabaikan (password = username bila dikosongkan). Kolom <b>mapel</b> (kode, pisah <b>;</b>) dan <b>kelas</b> (nama, pisah ;) bila diisi akan <b>menggantikan</b> penugasan mengajar guru tersebut. Baris-baris dengan <b>username</b> sama digabung penugasannya (satu baris per mapel boleh). Guru <b>BK</b> (<b>is_bk</b>=1): kolom <b>kelas</b> = kelas yang ditanganinya untuk <b>Catatan BK</b> (di halaman Catatan BK ia hanya melihat kelas-kelas tersebut). Bila ia juga mengajar mapel, isi kolom <b>mapel</b> seperti biasa (kode "BK" diabaikan — bukan mapel nilai).</p>
     <div style="overflow-x:auto">
     <table class="data" id="tabelGuru">
       <thead><tr><th>Nama</th><th>NIP</th><th>Username</th><th>Peran</th><th>Mengajar</th><th>Aksi</th></tr></thead>
@@ -83,10 +83,10 @@ async function muat() {
     return `<tr>
       <td>${esc(g.nama)}</td><td>${esc(g.nip || "-")}</td><td>${esc(g.username || "-")}</td>
       <td>${peran || '<span class="muted">—</span>'}</td>
-      <td>${g.is_bk ? `BK: ${g.jml_ajar} kelas` : `${g.jml_ajar} pasangan`}</td>
+      <td>${g.is_bk ? `BK: ${g.jml_bk} kelas${g.jml_ajar ? ` + ${g.jml_ajar} pasangan` : ""}` : `${g.jml_ajar} pasangan`}</td>
       <td>
         <button class="btn small" onclick="mulaiEdit(${g.id})">Ubah</button>
-        ${g.is_bk ? "" : `<button class="btn small gold" onclick="bukaAjar(${g.id})">Mengajar</button>`}
+        <button class="btn small gold" onclick="bukaAjar(${g.id})">Mengajar</button>
         <button class="btn small red" onclick="hapus(${g.id}, '${esc(g.nama)}')">Hapus</button>
       </td>
     </tr>`;
