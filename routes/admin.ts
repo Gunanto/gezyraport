@@ -634,8 +634,8 @@ admin.put("/guru/:id/ajar", async (c) => {
  * - jabatan wajib bila is_staf = ya
  * - mapel: kode dipisah ";" ; kelas: nama dipisah ";" → cross product
  *   MENGGANTIKAN penugasan mengajar lama (hanya bila kolom mapel/kelas ada di file)
- * - guru BK (is_bk=1) tidak diberi penugasan mengajar: hanya membuat catatan BK
- *   (semua kelas via flag is_bk), bukan input nilai — kolom mapel/kelas diabaikan
+ * - guru BK (is_bk=1): kolom `kelas` = kelas yang ditangani untuk Catatan BK
+ *   (disimpan di bk_kelas; bukan input nilai); kolom `mapel` diabaikan untuknya
  */
 
 function parseYaCSV(v: unknown): boolean {
@@ -687,9 +687,14 @@ admin.get("/guru/export", (c) => {
         (SELECT GROUP_CONCAT(kode, ';') FROM
            (SELECT DISTINCT m.kode AS kode FROM guru_mapel gm
             JOIN mapel m ON m.id = gm.mapel_id WHERE gm.guru_id = g.id)) AS mapel,
-        (SELECT GROUP_CONCAT(nama, ';') FROM
-           (SELECT DISTINCT k.nama AS nama FROM guru_mapel gm
-            JOIN kelas k ON k.id = gm.kelas_id WHERE gm.guru_id = g.id)) AS kelas
+        CASE WHEN g.is_bk = 1
+          THEN (SELECT GROUP_CONCAT(nama, ';') FROM
+                  (SELECT DISTINCT k.nama AS nama FROM bk_kelas b
+                   JOIN kelas k ON k.id = b.kelas_id WHERE b.guru_id = g.id))
+          ELSE (SELECT GROUP_CONCAT(nama, ';') FROM
+                  (SELECT DISTINCT k.nama AS nama FROM guru_mapel gm
+                   JOIN kelas k ON k.id = gm.kelas_id WHERE gm.guru_id = g.id))
+        END AS kelas
        FROM guru g JOIN users u ON u.id = g.user_id
        ORDER BY g.nama`
     )
@@ -759,6 +764,7 @@ admin.post("/guru/import", async (c) => {
     is_staf: boolean;
     jabatan: string | null;
     pasangan: Array<[string, string]>; // [kodeMapel, namaKelas]
+    kelas: string[]; // nama kelas mentah (untuk guru BK → bk_kelas)
   };
   // --- Fase 1: baca baris & kelompokkan per username ---
   const grup = new Map<string, BarisGuru>();
@@ -799,6 +805,7 @@ admin.post("/guru/import", async (c) => {
       is_staf,
       jabatan,
       pasangan: [],
+      kelas: namaKelas,
     };
     for (const m of kodeMapel)
       for (const k of namaKelas)
@@ -810,6 +817,7 @@ admin.post("/guru/import", async (c) => {
       for (const [m, k] of b.pasangan)
         if (!g.pasangan.some(([a, c]) => a === m && c === k))
           g.pasangan.push([m, k]);
+      for (const k of b.kelas) if (!g.kelas.includes(k)) g.kelas.push(k);
       g.nos.push(no);
       // field lain ikut baris terakhir (boleh mengoreksi baris sebelumnya)
       g.nama = b.nama;
@@ -827,30 +835,14 @@ admin.post("/guru/import", async (c) => {
       g.nos.length > 1 ? `Baris ${g.nos.join(",")}` : `Baris ${g.nos[0]}`;
     const { username, nama, nip, pw, is_bk, is_ekskul, is_staf } = g;
     const jabatan = g.jabatan;
-    // Guru BK hanya membuat catatan BK (semua kelas, via flag is_bk) — bukan input nilai,
-    // jadi tidak diberi penugasan mengajar; kolom mapel/kelas diabaikan untuknya.
-    if (is_bk) g.pasangan = [];
-    // validasi mapel & kelas dulu sebelum mengubah apa pun
-    let tugas: Array<[number, number]> | null = null;
+    // validasi mapel & kelas dulu sebelum mengubah apa pun.
+    // Guru BK: kolom `kelas` = kelas yang ditangani untuk Catatan BK (bukan input nilai),
+    // disimpan di bk_kelas; kolom `mapel` diabaikan untuknya.
+    let tugas: Array<[number, number]> | null = null; // guru_mapel
+    let tugasBK: number[] | null = null; // bk_kelas (id kelas)
     if (adaKolomTugas) {
-      tugas = [];
-      const cacheM = new Map<string, number>(),
-        cacheK = new Map<string, number>();
-      let batal = false;
-      for (const [kd, nk] of g.pasangan) {
-        let mid = cacheM.get(kd.toLowerCase());
-        if (mid === undefined) {
-          const mm = db
-            .query("SELECT id FROM mapel WHERE LOWER(kode) = LOWER(?)")
-            .get(kd) as any;
-          if (!mm) {
-            gagal.push(`${label}: kode mapel "${kd}" tidak ditemukan`);
-            batal = true;
-            break;
-          }
-          mid = mm.id;
-          cacheM.set(kd.toLowerCase(), mid);
-        }
+      const cacheK = new Map<string, number>();
+      const cariKelas = (nk: string): number | null => {
         let kid = cacheK.get(nk.toLowerCase());
         if (kid === undefined) {
           const kk = db
@@ -858,15 +850,51 @@ admin.post("/guru/import", async (c) => {
             .get(nk) as any;
           if (!kk) {
             gagal.push(`${label}: kelas "${nk}" tidak ditemukan`);
-            batal = true;
-            break;
+            return null;
           }
           kid = kk.id;
           cacheK.set(nk.toLowerCase(), kid);
         }
-        tugas.push([mid, kid]);
+        return kid;
+      };
+      if (is_bk) {
+        tugasBK = [];
+        for (const nk of g.kelas) {
+          const kid = cariKelas(nk);
+          if (kid === null) {
+            tugasBK = null;
+            break;
+          }
+          if (!tugasBK.includes(kid)) tugasBK.push(kid);
+        }
+        if (tugasBK === null) continue;
+      } else {
+        tugas = [];
+        const cacheM = new Map<string, number>();
+        let batal = false;
+        for (const [kd, nk] of g.pasangan) {
+          let mid = cacheM.get(kd.toLowerCase());
+          if (mid === undefined) {
+            const mm = db
+              .query("SELECT id FROM mapel WHERE LOWER(kode) = LOWER(?)")
+              .get(kd) as any;
+            if (!mm) {
+              gagal.push(`${label}: kode mapel "${kd}" tidak ditemukan`);
+              batal = true;
+              break;
+            }
+            mid = mm.id;
+            cacheM.set(kd.toLowerCase(), mid);
+          }
+          const kid = cariKelas(nk);
+          if (kid === null) {
+            batal = true;
+            break;
+          }
+          tugas.push([mid, kid]);
+        }
+        if (batal) continue;
       }
-      if (batal) continue;
     }
     try {
       const ex = db
@@ -887,17 +915,27 @@ admin.post("/guru/import", async (c) => {
           (ex.jabatan ?? null) !== fJabatan;
         if (pw) berubah = true; // password diisi = perubahan
         if (adaKolomTugas) {
-          const baru: string[] = (tugas as Array<[number, number]>)
-            .map(([m, k]) => `${m}:${k}`)
-            .sort();
-          const lama = (
-            db
-              .query(
-                "SELECT mapel_id, kelas_id FROM guru_mapel WHERE guru_id = ? ORDER BY mapel_id, kelas_id"
-              )
-              .all(ex.id) as any[]
-          ).map((a) => `${a.mapel_id}:${a.kelas_id}`);
-          if (JSON.stringify(lama) !== JSON.stringify(baru)) berubah = true;
+          if (is_bk) {
+            const baru = [...(tugasBK as number[])].sort((a, b) => a - b);
+            const lama = (
+              db
+                .query("SELECT kelas_id FROM bk_kelas WHERE guru_id = ? ORDER BY kelas_id")
+                .all(ex.id) as any[]
+            ).map((a) => a.kelas_id);
+            if (JSON.stringify(lama) !== JSON.stringify(baru)) berubah = true;
+          } else {
+            const baru: string[] = (tugas as Array<[number, number]>)
+              .map(([m, k]) => `${m}:${k}`)
+              .sort();
+            const lama = (
+              db
+                .query(
+                  "SELECT mapel_id, kelas_id FROM guru_mapel WHERE guru_id = ? ORDER BY mapel_id, kelas_id"
+                )
+                .all(ex.id) as any[]
+            ).map((a) => `${a.mapel_id}:${a.kelas_id}`);
+            if (JSON.stringify(lama) !== JSON.stringify(baru)) berubah = true;
+          }
         }
         if (!berubah) {
           diabaikan++;
@@ -943,10 +981,23 @@ admin.post("/guru/import", async (c) => {
         gid = Number(gr.lastInsertRowid);
         dibuat++;
       }
-      if (tugas !== null) {
+      if (tugasBK !== null) {
+        // Guru BK: simpan kelas yang ditangani (untuk Catatan BK), kosongkan penugasan mengajar
+        const daftar = tugasBK;
+        const ganti = db.transaction(() => {
+          db.query("DELETE FROM bk_kelas WHERE guru_id = ?").run(gid);
+          db.query("DELETE FROM guru_mapel WHERE guru_id = ?").run(gid);
+          const ins = db.query(
+            "INSERT OR IGNORE INTO bk_kelas (guru_id, kelas_id) VALUES (?,?)"
+          );
+          for (const kid of daftar) ins.run(gid, kid);
+        });
+        ganti();
+      } else if (tugas !== null) {
         const daftar = tugas;
         const ganti = db.transaction(() => {
           db.query("DELETE FROM guru_mapel WHERE guru_id = ?").run(gid);
+          db.query("DELETE FROM bk_kelas WHERE guru_id = ?").run(gid);
           const ins = db.query(
             "INSERT OR IGNORE INTO guru_mapel (guru_id, mapel_id, kelas_id) VALUES (?,?,?)"
           );

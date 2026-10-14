@@ -88,7 +88,7 @@ function tampilHasil(box, data) {
     showMsg("msg", "Halaman ini khusus guru BK.", "error");
     return;
   }
-  const rk = await api("/api/catatan/kelas");
+  const rk = await api("/api/catatan/kelas?fitur=bk");
   const daftar = rk.ok ? rk.data.kelas : [];
   document.getElementById("kelas").innerHTML = '<option value="">— pilih —</option>' +
     daftar.map(k => `<option value="${k.id}">${esc(k.nama)}</option>`).join("");

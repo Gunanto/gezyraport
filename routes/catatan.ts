@@ -41,15 +41,33 @@ function cekAjar(gid: number, mapel_id: any, kelas_id: any): boolean {
     .get(gid, mapel_id, kelas_id);
 }
 
+/** Kelas-kelas yang ditangani seorang guru BK (untuk Catatan BK). */
+function cekBK(gid: number, kelas_id: any): boolean {
+  return !!db
+    .query("SELECT 1 FROM bk_kelas WHERE guru_id = ? AND kelas_id = ?")
+    .get(gid, kelas_id);
+}
+
 function kelasAda(kelas_id: any): boolean {
   return !!db.query("SELECT 1 FROM kelas WHERE id = ?").get(kelas_id);
 }
 
-/** Daftar semua kelas (untuk pemilih kelas di halaman BK/ekskul). */
+/** Daftar kelas (untuk pemilih kelas di halaman BK/ekskul).
+ *  Guru BK hanya melihat kelas yang ditanganinya (?fitur=bk). */
 catatan.get("/kelas", (c) => {
-  const rows = db
-    .query("SELECT id, nama, tingkat FROM kelas ORDER BY tingkat, nama")
-    .all();
+  const gi = infoGuru(c);
+  const rows =
+    gi && gi.is_bk && c.req.query("fitur") === "bk"
+      ? db
+          .query(
+            `SELECT k.id, k.nama, k.tingkat FROM bk_kelas b
+             JOIN kelas k ON k.id = b.kelas_id
+             WHERE b.guru_id = ? ORDER BY k.tingkat, k.nama`
+          )
+          .all(gi.gid)
+      : db
+          .query("SELECT id, nama, tingkat FROM kelas ORDER BY tingkat, nama")
+          .all();
   return c.json({ kelas: rows });
 });
 
@@ -172,6 +190,8 @@ catatan.get("/bk", (c) => {
   const gi = infoGuru(c);
   if (gi && !gi.is_bk)
     return c.json({ error: "Halaman ini khusus guru BK" }, 403);
+  if (gi && !cekBK(gi.gid, kelas_id))
+    return c.json({ error: "Anda bukan guru BK kelas ini" }, 403);
   return c.json({
     siswa: siswaDenganCatatan(kelas_id, ["catatan_bk"]),
     periode: periodeAktif(),
@@ -185,6 +205,8 @@ catatan.put("/bk", async (c) => {
   const { kelas_id, rows } = await c.req.json();
   if (!kelas_id || !kelasAda(kelas_id) || !Array.isArray(rows))
     return c.json({ error: "kelas_id dan rows wajib diisi" }, 400);
+  if (gi && !cekBK(gi.gid, kelas_id))
+    return c.json({ error: "Anda bukan guru BK kelas ini" }, 403);
   let tersimpan = 0;
   const gagal: string[] = [];
   const simpan = db.transaction(() => {
@@ -311,7 +333,12 @@ const FITUR: Record<string, FiturCatatan> = {
     kolom: ["catatan_bk"],
     csv: ["nis", "nama", "catatan_bk"],
     perluMapel: false,
-    cek: (gi) => (gi && !gi.is_bk ? "Halaman ini khusus guru BK" : null),
+    cek: (gi, kelas_id) =>
+      gi && !gi.is_bk
+        ? "Halaman ini khusus guru BK"
+        : gi && !cekBK(gi.gid, kelas_id)
+          ? "Anda bukan guru BK kelas ini"
+          : null,
   },
   ekskul: {
     kolom: ["catatan_ekskul"],

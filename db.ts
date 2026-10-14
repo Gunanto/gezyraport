@@ -51,6 +51,11 @@ CREATE TABLE IF NOT EXISTS guru_mapel (
   kelas_id INTEGER,
   PRIMARY KEY(guru_id,mapel_id,kelas_id)
 );
+CREATE TABLE IF NOT EXISTS bk_kelas (
+  guru_id INTEGER,
+  kelas_id INTEGER,
+  PRIMARY KEY(guru_id,kelas_id)
+);
 CREATE TABLE IF NOT EXISTS rentang_nilai (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   mapel_id INTEGER NOT NULL,
