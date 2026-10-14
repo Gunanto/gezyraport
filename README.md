@@ -44,6 +44,8 @@ Predikat dihitung otomatis dari rentang yang ditetapkan guru; bila guru belum me
 
 **Beranda admin** menampilkan card rekap (jumlah guru, siswa, kelas, mapel aktif) yang diambil langsung dari database — tiap card bisa diklik menuju halamannya. Tabel **Siswa** memakai pagination 25 baris per halaman agar ringan dibuka.
 
+**Cetak raport**: per siswa via `cetak.html?siswa=ID`, atau **sekaligus sekelas** via menu **Cetak per Kelas** (`cetak-kelas.html`) — admin memilih kelas mana saja, wali kelas otomatis kelasnya sendiri; tiap siswa ganti halaman saat diprint. Blok tanda tangan raport: 3 kolom sejajar — Orang Tua/Wali, Wali Kelas, Kepala Sekolah.
+
 Catatan dev: link CSS memakai `?v=...` (cache-busting) — setiap mengubah `public/css/style.css`, naikkan versinya di semua halaman agar browser pengunjung memuat CSS baru.
 
 ### Format CSV catatan (import/export)

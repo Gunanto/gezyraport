@@ -12,22 +12,8 @@ import {
 const raport = new Hono();
 raport.use(requireRole("admin", "guru", "siswa"));
 
-raport.get("/raport", (c) => {
-  const u = c.get("user") as any;
-  let siswa_id: any = c.req.query("siswa_id");
-
-  // siswa/ortu tanpa parameter -> raport miliknya sendiri
-  if (!siswa_id) {
-    if (u.role !== "siswa")
-      return c.json({ error: "Parameter siswa_id wajib diisi" }, 400);
-    const own = db
-      .query("SELECT id FROM siswa WHERE user_id = ?")
-      .get(u.id) as any;
-    if (!own) return c.json({ error: "Data siswa tidak ditemukan" }, 404);
-    siswa_id = own.id;
-  }
-
-  const sw = db
+function ambilSiswa(siswa_id: number) {
+  return db
     .query(
       `SELECT s.id, s.nis, s.nama, s.agama, s.jenis_kelamin,
               k.id AS kelas_id, k.nama AS kelas, k.tingkat,
@@ -38,30 +24,10 @@ raport.get("/raport", (c) => {
        WHERE s.id = ?`
     )
     .get(siswa_id) as any;
-  if (!sw) return c.json({ error: "Siswa tidak ditemukan" }, 404);
+}
 
-  // ---- Guard akses ----
-  if (u.role === "siswa") {
-    const own = db
-      .query("SELECT id FROM siswa WHERE user_id = ?")
-      .get(u.id) as any;
-    if (!own || Number(siswa_id) !== own.id)
-      return c.json({ error: "Akses ditolak" }, 403);
-  } else if (u.role === "guru") {
-    const g = db.query("SELECT id FROM guru WHERE user_id = ?").get(u.id) as any;
-    if (!g) return c.json({ error: "Data guru tidak ditemukan" }, 404);
-    const boleh = db
-      .query(
-        "SELECT 1 FROM guru_mapel WHERE guru_id = ? AND kelas_id = ? LIMIT 1"
-      )
-      .get(g.id, sw.kelas_id);
-    if (!boleh)
-      return c.json(
-        { error: "Anda tidak mengajar di kelas siswa ini" },
-        403
-      );
-  }
-
+/** Bangun objek data raport satu siswa (dipakai endpoint satuan & per kelas). */
+function bangunRaport(sw: any) {
   const p = periodeAktif();
   const desain = db
     .query("SELECT * FROM desain_raport WHERE id = 1")
@@ -76,7 +42,7 @@ raport.get("/raport", (c) => {
       .query(
         "SELECT nilai_angka FROM nilai WHERE siswa_id = ? AND mapel_id = ? AND tahun_ajaran = ? AND semester = ?"
       )
-      .get(siswa_id, m.id, p.tahun_ajaran, p.semester) as any;
+      .get(sw.id, m.id, p.tahun_ajaran, p.semester) as any;
     const nilai = n ? n.nilai_angka : null;
     return {
       mapel: m.nama,
@@ -90,7 +56,7 @@ raport.get("/raport", (c) => {
     .query(
       "SELECT * FROM catatan_raport WHERE siswa_id = ? AND tahun_ajaran = ? AND semester = ?"
     )
-    .get(siswa_id, p.tahun_ajaran, p.semester) as any;
+    .get(sw.id, p.tahun_ajaran, p.semester) as any;
 
   // ---- Judul, tempat & tanggal (bisa diubah admin di menu Desain) ----
   const judul =
@@ -102,7 +68,7 @@ raport.get("/raport", (c) => {
       : null;
   const tanggalTeks = tglISO ? tanggalIDdariISO(tglISO) : tanggalID();
 
-  return c.json({
+  return {
     identitas: {
       nama: sw.nama,
       nis: sw.nis,
@@ -143,6 +109,84 @@ raport.get("/raport", (c) => {
       kop: desain?.kop_path || null,
       judul,
     },
+  };
+}
+
+/* ============ SATUAN ============ */
+raport.get("/raport", (c) => {
+  const u = c.get("user") as any;
+  let siswa_id: any = c.req.query("siswa_id");
+
+  // siswa/ortu tanpa parameter -> raport miliknya sendiri
+  if (!siswa_id) {
+    if (u.role !== "siswa")
+      return c.json({ error: "Parameter siswa_id wajib diisi" }, 400);
+    const own = db
+      .query("SELECT id FROM siswa WHERE user_id = ?")
+      .get(u.id) as any;
+    if (!own) return c.json({ error: "Data siswa tidak ditemukan" }, 404);
+    siswa_id = own.id;
+  }
+
+  const sw = ambilSiswa(Number(siswa_id));
+  if (!sw) return c.json({ error: "Siswa tidak ditemukan" }, 404);
+
+  // ---- Guard akses ----
+  if (u.role === "siswa") {
+    const own = db
+      .query("SELECT id FROM siswa WHERE user_id = ?")
+      .get(u.id) as any;
+    if (!own || Number(siswa_id) !== own.id)
+      return c.json({ error: "Akses ditolak" }, 403);
+  } else if (u.role === "guru") {
+    const g = db.query("SELECT id FROM guru WHERE user_id = ?").get(u.id) as any;
+    if (!g) return c.json({ error: "Data guru tidak ditemukan" }, 404);
+    const boleh = db
+      .query(
+        "SELECT 1 FROM guru_mapel WHERE guru_id = ? AND kelas_id = ? LIMIT 1"
+      )
+      .get(g.id, sw.kelas_id);
+    if (!boleh)
+      return c.json(
+        { error: "Anda tidak mengajar di kelas siswa ini" },
+        403
+      );
+  }
+
+  return c.json(bangunRaport(sw));
+});
+
+/* ============ PER KELAS (admin & wali kelas) ============ */
+raport.get("/raport/kelas/:kelas_id", (c) => {
+  const u = c.get("user") as any;
+  const kelas_id = Number(c.req.param("kelas_id"));
+  if (!kelas_id) return c.json({ error: "kelas_id tidak valid" }, 400);
+
+  if (u.role === "siswa")
+    return c.json({ error: "Akses ditolak" }, 403);
+  if (u.role === "guru") {
+    const g = db.query("SELECT id FROM guru WHERE user_id = ?").get(u.id) as any;
+    const wali = g
+      ? db
+          .query("SELECT 1 FROM kelas WHERE id = ? AND wali_guru_id = ?")
+          .get(kelas_id, g.id)
+      : null;
+    if (!wali)
+      return c.json(
+        { error: "Hanya wali kelas yang dapat mencetak raport sekelas" },
+        403
+      );
+  }
+
+  const kelas = db.query("SELECT nama FROM kelas WHERE id = ?").get(kelas_id) as any;
+  if (!kelas) return c.json({ error: "Kelas tidak ditemukan" }, 404);
+  const daftar = db
+    .query("SELECT id FROM siswa WHERE kelas_id = ? ORDER BY nama")
+    .all(kelas_id) as any[];
+  return c.json({
+    kelas: kelas.nama,
+    jumlah: daftar.length,
+    raport: daftar.map((s) => bangunRaport(ambilSiswa(s.id))),
   });
 });
 

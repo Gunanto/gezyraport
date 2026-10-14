@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cetak per Kelas — GezyRaport</title>
+<link rel="stylesheet" href="/css/style.css?v=20261014d">
+</head>
+<body class="no-footer">
+<header class="topbar">
+  <div class="brand">🎓 GezyRaport <small>SMPN 1 Punggur</small></div>
+  <nav id="nav"></nav>
+  <div class="spacer"></div>
+  <span class="userinfo" id="userInfo"></span>
+  <button class="btn small" id="btnLogout">Keluar</button>
+</header>
+<main class="container">
+  <div class="card no-print">
+    <h2>🖨 Cetak Raport per Kelas</h2>
+    <p class="muted">Satu kali cetak untuk seluruh siswa dalam satu kelas — tiap siswa otomatis ganti halaman.</p>
+    <div id="msg" class="alert hidden"></div>
+    <div class="toolbar">
+      <label>Kelas: <select id="pilihKelas"><option value="">— pilih —</option></select></label>
+      <button class="btn gold" type="button" id="btnTampil">Tampilkan</button>
+      <button class="btn" type="button" id="btnCetak" disabled>🖨 Cetak / Simpan PDF</button>
+    </div>
+  </div>
+  <div id="hasil"></div>
+</main>
+<script src="/js/common.js?v=20261014d"></script>
+<script src="/js/cetak.js?v=20261014d"></script>
+<script>
+(async () => {
+  const user = await requireLogin(["admin", "guru"]);
+  if (!user) return;
+  const sel = document.getElementById("pilihKelas");
+  let daftarKelas = [];
+  if (user.role === "admin") {
+    const r = await api("/api/admin/kelas");
+    daftarKelas = r.ok ? r.data.kelas : [];
+  } else {
+    daftarKelas = user.wali_kelas || [];
+    if (!daftarKelas.length) {
+      showMsg("msg", "Hanya wali kelas yang dapat mencetak raport per kelas.", "error");
+      return;
+    }
+  }
+  sel.innerHTML = '<option value="">— pilih —</option>' +
+    daftarKelas.map(k => `<option value="${k.id}">${esc(k.nama)}</option>`).join("");
+  if (daftarKelas.length === 1) sel.value = daftarKelas[0].id;
+
+  document.getElementById("btnTampil").addEventListener("click", async () => {
+    const id = sel.value;
+    if (!id) return showMsg("msg", "Pilih kelas dulu.", "error");
+    hideMsg("msg");
+    const box = document.getElementById("hasil");
+    box.innerHTML = '<div class="card no-print"><p class="muted">Memuat raport sekelas...</p></div>';
+    document.getElementById("btnCetak").disabled = true;
+    const r = await api(`/api/raport/kelas/${id}`);
+    if (!r.ok) {
+      box.innerHTML = "";
+      return showMsg("msg", (r.data && r.data.error) || "Gagal memuat raport", "error");
+    }
+    const d = r.data;
+    if (!d.jumlah) {
+      box.innerHTML = "";
+      return showMsg("msg", `Kelas ${esc(d.kelas)} belum memiliki siswa.`, "error");
+    }
+    document.title = `Raport Kelas ${d.kelas} — GezyRaport`;
+    box.innerHTML =
+      `<p class="muted no-print">Menampilkan <b>${d.jumlah}</b> raport — Kelas <b>${esc(d.kelas)}</b>. Klik Cetak untuk mencetak semuanya sekaligus.</p>` +
+      d.raport.map(x => `<div class="lembar"><div class="kertas">${renderCetak(x)}</div></div>`).join("");
+    document.getElementById("btnCetak").disabled = false;
+    box.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  document.getElementById("btnCetak").addEventListener("click", () => window.print());
+})();
+</script>
+</body>
+</html>

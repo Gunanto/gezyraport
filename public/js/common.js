@@ -10,6 +10,7 @@ const NAVS = {
     ["Mapel", "/mapel.html"],
     ["Desain Raport", "/desain.html"],
     ["Leger Nilai", "/leger.html"],
+    ["Cetak per Kelas", "/cetak-kelas.html"],
   ],
   siswa: [
     ["Beranda", "/"],
@@ -27,8 +28,10 @@ function navGuru(user) {
       ["Catatan Guru", "/catatan-guru.html"]
     );
   }
-  if (user.wali_kelas && user.wali_kelas.length)
+  if (user.wali_kelas && user.wali_kelas.length) {
     items.push(["Catatan Wali", "/wali.html"]);
+    items.push(["Cetak per Kelas", "/cetak-kelas.html"]);
+  }
   if (user.is_bk) items.push(["Catatan BK", "/bk.html"]);
   if (user.is_ekskul) items.push(["Catatan Ekskul", "/ekskul.html"]);
   if (user.is_staf || (user.wali_kelas && user.wali_kelas.length))

@@ -38,18 +38,18 @@ function renderCetak(d) {
   <div class="catatan-box"><b>Catatan Ekstrakurikuler</b>${esc(cat.ekskul || "-")}</div>
   <div class="catatan-box"><b>Catatan Guru</b>${esc(cat.guru || "-")}</div>
   <p><b>Ketidakhadiran:</b> Sakit: ${d.kehadiran.sakit} hari &nbsp; Izin: ${d.kehadiran.izin} hari &nbsp; Tanpa keterangan: ${d.kehadiran.alpa} hari</p>
+  <div class="ttd-tempat">${esc(tempat)}${tempat ? "," : ""} ${esc(tanggalTeks)}</div>
   <div class="ttd">
-    <div class="kolom"></div>
-    <div class="kolom">${esc(tempat)}${tempat ? "," : ""} ${esc(tanggalTeks)}<br>Kepala Sekolah<br><br><br>
-      <div class="nama">${esc(ttd.kepala_nama || "........................")}</div>
-      ${ttd.kepala_nip ? `NIP. ${esc(ttd.kepala_nip)}` : ""}
+    <div class="kolom">Orang Tua/Wali<br><br><br><br>
+      <div class="nama">........................</div>
     </div>
-  </div>
-  <div class="ttd">
-    <div class="kolom">Wali Kelas<br><br><br>
+    <div class="kolom">Wali Kelas<br><br><br><br>
       <div class="nama">${esc(ttd.wali_nama || "........................")}</div>
       ${ttd.wali_nip ? `NIP. ${esc(ttd.wali_nip)}` : ""}
     </div>
-    <div class="kolom"></div>
+    <div class="kolom">Kepala Sekolah<br><br><br><br>
+      <div class="nama">${esc(ttd.kepala_nama || "........................")}</div>
+      ${ttd.kepala_nip ? `NIP. ${esc(ttd.kepala_nip)}` : ""}
+    </div>
   </div>`;
 }
