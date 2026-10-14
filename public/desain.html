@@ -42,9 +42,15 @@
       </div>
       <div class="toolbar">
         <button class="btn gold" type="submit">💾 Simpan Desain</button>
+        <button class="btn" type="button" id="btnPratinjau">👁 Pratinjau</button>
       </div>
     </form>
     <p class="muted">⚠️ Mengganti <b>Semester / Tahun Ajaran Aktif</b> akan mengalihkan seluruh input nilai &amp; catatan ke periode baru (data periode lama tetap tersimpan di database).</p>
+  </div>
+  <div class="card hidden" id="pratinjauWrap">
+    <h3>👁 Pratinjau Tampilan Raport</h3>
+    <p class="muted">Diambil dari isian form di atas (belum harus disimpan).</p>
+    <div class="kertas" id="pratinjauKertas"></div>
   </div>
   <div class="card">
     <h3>🖼 Kop Raport (gambar)</h3>
@@ -60,7 +66,9 @@
 </main>
 <script src="/js/common.js?v=20261014c"></script>
 <script>
+let kopPath = null;
 function renderKop(kop_path) {
+  kopPath = kop_path || null;
   const box = document.getElementById("kopSaatIni");
   if (kop_path) {
     box.innerHTML = `<p class="muted">Kop saat ini:</p>
@@ -68,6 +76,56 @@ function renderKop(kop_path) {
   } else {
     box.innerHTML = '<p class="muted">Belum ada gambar kop — raport memakai kop teks (nama sekolah).</p>';
   }
+}
+
+/** HTML pratinjau — markup sama persis dengan halaman cetak raport. */
+function pratinjauHtml(v) {
+  const kopHtml = v.kop
+    ? `<div class="kop"><img src="${esc(v.kop)}" alt="Kop raport" class="kop-img"></div>`
+    : `<div class="kop">
+    <h2>${esc(v.nama_sekolah || "SMP NEGERI 1 PUNGGUR")}</h2>
+    ${v.alamat_sekolah ? `<p>${esc(v.alamat_sekolah)}</p>` : ""}
+  </div>`;
+  const tgl = v.tanggal_raport
+    ? new Date(v.tanggal_raport + "T00:00:00").toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })
+    : new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
+  const tempat = v.tempat || v.kota || "";
+  return `
+  ${kopHtml}
+  <div class="judul-raport"><h3>${esc(v.judul_raport || "LAPORAN HASIL BELAJAR PESERTA DIDIK")}</h3></div>
+  <table class="identitas">
+    <tr><td style="width:170px">Nama Peserta Didik</td><td style="width:10px">:</td><td><b>....................</b></td>
+        <td style="width:150px">Kelas</td><td style="width:10px">:</td><td>........</td></tr>
+    <tr><td>NIS</td><td>:</td><td>........</td>
+        <td>Semester</td><td>:</td><td>${esc(v.semester_aktif || "Ganjil")}</td></tr>
+    <tr><td>Jenis Kelamin</td><td>:</td><td>........</td>
+        <td>Tahun Ajaran</td><td>:</td><td>${esc(v.tahun_ajaran_aktif || "")}</td></tr>
+  </table>
+  <p class="muted" style="text-align:center">⋮ tabel nilai, catatan, dan kehadiran tampil di sini ⋮</p>
+  <div class="ttd">
+    <div class="kolom"></div>
+    <div class="kolom">${esc(tempat)}${tempat ? "," : ""} ${esc(tgl)}<br>Kepala Sekolah<br><br><br>
+      <div class="nama">${esc(v.kepala_nama || "........................")}</div>
+      ${v.kepala_nip ? `NIP. ${esc(v.kepala_nip)}` : ""}
+    </div>
+  </div>`;
+}
+
+function bacaFormDesain() {
+  const val = (id) => document.getElementById(id).value.trim();
+  return {
+    nama_sekolah: val("nama_sekolah"),
+    alamat_sekolah: val("alamat_sekolah"),
+    kepala_nama: val("kepala_nama"),
+    kepala_nip: val("kepala_nip"),
+    kota: val("kota"),
+    semester_aktif: document.getElementById("semester_aktif").value,
+    tahun_ajaran_aktif: val("tahun_ajaran_aktif"),
+    judul_raport: val("judul_raport"),
+    tempat: val("tempat"),
+    tanggal_raport: document.getElementById("tanggal_raport").value,
+    kop: kopPath,
+  };
 }
 
 async function muat() {
@@ -112,6 +170,11 @@ async function muat() {
   document.getElementById("btnClearTanggal").addEventListener("click", () => {
     document.getElementById("tanggal_raport").value = "";
     showMsg("msg", "Tanggal dikosongkan — raport akan memakai tanggal hari ini. Klik Simpan Desain.", "ok");
+  });
+  document.getElementById("btnPratinjau").addEventListener("click", () => {
+    document.getElementById("pratinjauKertas").innerHTML = pratinjauHtml(bacaFormDesain());
+    document.getElementById("pratinjauWrap").classList.remove("hidden");
+    document.getElementById("pratinjauWrap").scrollIntoView({ behavior: "smooth", block: "start" });
   });
   document.getElementById("btnHapusKop").addEventListener("click", async () => {
     if (!await confirmHapus("Hapus gambar kop raport?")) return;
