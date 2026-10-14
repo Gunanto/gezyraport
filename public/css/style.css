@@ -227,3 +227,12 @@ input.hadir-input { width: 64px; text-align: center; }
 .pagination button:disabled { opacity: 0.45; cursor: default; }
 .pagination .dots { color: var(--muted); padding: 0 0.2rem; }
 .pagination-info { text-align: center; color: var(--muted); font-size: 0.85rem; margin-top: 0.5rem; }
+
+/* Footer global */
+.global-footer {
+  text-align: center; color: var(--muted); font-size: 0.82rem;
+  padding: 1.6rem 1rem 1.4rem; margin-top: 2rem;
+  border-top: 1px solid var(--border);
+}
+.global-footer .foot-sub { font-size: 0.75rem; margin-top: 0.25rem; }
+@media print { .global-footer { display: none; } }
