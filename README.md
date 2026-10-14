@@ -44,6 +44,8 @@ Predikat dihitung otomatis dari rentang yang ditetapkan guru; bila guru belum me
 
 **Beranda admin** menampilkan card rekap (jumlah guru, siswa, kelas, mapel aktif) yang diambil langsung dari database — tiap card bisa diklik menuju halamannya. Tabel **Siswa** memakai pagination 25 baris per halaman agar ringan dibuka.
 
+Catatan dev: link CSS memakai `?v=...` (cache-busting) — setiap mengubah `public/css/style.css`, naikkan versinya di semua halaman agar browser pengunjung memuat CSS baru.
+
 ### Format CSV catatan (import/export)
 
 Kolom `nama` hanya referensi; pencocokan saat import memakai `nis` (harus siswa di kelas yang dipilih). Hanya kolom milik fitur itu yang diupdate:
