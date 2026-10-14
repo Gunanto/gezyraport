@@ -83,10 +83,10 @@ async function muat() {
     return `<tr>
       <td>${esc(g.nama)}</td><td>${esc(g.nip || "-")}</td><td>${esc(g.username || "-")}</td>
       <td>${peran || '<span class="muted">—</span>'}</td>
-      <td>${g.jml_ajar} pasangan</td>
+      <td>${g.is_bk ? `BK: ${g.jml_ajar} kelas` : `${g.jml_ajar} pasangan`}</td>
       <td>
         <button class="btn small" onclick="mulaiEdit(${g.id})">Ubah</button>
-        <button class="btn small gold" onclick="bukaAjar(${g.id})">Mengajar</button>
+        ${g.is_bk ? "" : `<button class="btn small gold" onclick="bukaAjar(${g.id})">Mengajar</button>`}
         <button class="btn small red" onclick="hapus(${g.id}, '${esc(g.nama)}')">Hapus</button>
       </td>
     </tr>`;

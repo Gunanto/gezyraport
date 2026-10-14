@@ -503,7 +503,10 @@ admin.get("/guru", (c) => {
   const rows = db
     .query(
       `SELECT g.*, u.username,
-              (SELECT COUNT(*) FROM guru_mapel gm WHERE gm.guru_id = g.id) AS jml_ajar
+              CASE WHEN g.is_bk = 1
+                THEN (SELECT COUNT(*) FROM bk_kelas b WHERE b.guru_id = g.id)
+                ELSE (SELECT COUNT(*) FROM guru_mapel gm WHERE gm.guru_id = g.id)
+              END AS jml_ajar
        FROM guru g LEFT JOIN users u ON u.id = g.user_id
        ORDER BY g.nama`
     )
@@ -605,8 +608,13 @@ admin.get("/guru/:id/ajar", (c) => {
 admin.put("/guru/:id/ajar", async (c) => {
   const id = c.req.param("id");
   const { daftar } = await c.req.json();
-  const ada = db.query("SELECT id FROM guru WHERE id = ?").get(id);
-  if (!ada) return c.json({ error: "Guru tidak ditemukan" }, 404);
+  const gr = db.query("SELECT id, is_bk FROM guru WHERE id = ?").get(id) as any;
+  if (!gr) return c.json({ error: "Guru tidak ditemukan" }, 404);
+  if (gr.is_bk)
+    return c.json(
+      { error: "Guru BK tidak memiliki penugasan mengajar (kelas BK diatur via import)" },
+      400
+    );
   if (!Array.isArray(daftar))
     return c.json({ error: "daftar harus berupa array" }, 400);
   for (const d of daftar) {
