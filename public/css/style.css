@@ -178,3 +178,21 @@ table.nilai-cetak td.angka, table.nilai-cetak th.angka { text-align: center; }
   .card { box-shadow: none; border: none; }
   a { text-decoration: none; color: inherit; }
 }
+
+/* ---------- Fase 2 ---------- */
+.badge {
+  display: inline-block;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: #dbeafe;
+  color: #1e3a8a;
+  margin-right: 0.25rem;
+}
+.badge.gold { background: #fef3c7; color: #92400e; }
+label.checkbox { flex-direction: row; align-items: center; gap: 0.5rem; }
+label.checkbox input { width: auto; }
+textarea.catatan-input { width: 100%; min-height: 3.4rem; resize: vertical; }
+input.hadir-input { width: 64px; text-align: center; }
+.kop-img { max-width: 100%; max-height: 170px; }

@@ -32,6 +32,11 @@ const MENU_DETAIL = {
   "/rentang.html": ["📊", "Rentang Nilai", "Tetapkan rentang predikat tiap mapel."],
   "/nilai.html": ["✏️", "Input Nilai", "Input nilai per kelas atau import CSV."],
   "/raport.html": ["📄", "Raport Saya", "Lihat dan cetak raport semester aktif."],
+  "/desain.html": ["🎨", "Desain Raport", "Kop raport, kepala sekolah, dan periode aktif."],
+  "/wali.html": ["🧑‍🏫", "Catatan Wali Kelas", "Catatan wali + kehadiran S/I/A per siswa."],
+  "/bk.html": ["🧠", "Catatan BK", "Catatan bimbingan konseling per siswa."],
+  "/ekskul.html": ["⚽", "Catatan Ekskul", "Catatan ekstrakurikuler per siswa."],
+  "/catatan-guru.html": ["📝", "Catatan Guru", "Catatan guru mapel per siswa."],
 };
 (async () => {
   const user = await requireLogin();
@@ -39,7 +44,7 @@ const MENU_DETAIL = {
   const nama = user.guru_nama || user.siswa_nama || user.username;
   document.getElementById("sapaan").textContent = `Selamat datang, ${nama}!`;
   const grid = document.getElementById("menuGrid");
-  const items = (NAVS[user.role] || []).filter(([, href]) => href !== "/");
+  const items = navItems(user).filter(([, href]) => href !== "/");
   grid.innerHTML = items.map(([, href]) => {
     const [icon, judul, desc] = MENU_DETAIL[href] || ["📁", href, ""];
     return `<a class="menu-card" href="${href}">

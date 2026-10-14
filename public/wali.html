@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Catatan Wali Kelas — GezyRaport</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">🎓 GezyRaport <small>SMPN 1 Punggur</small></div>
+  <nav id="nav"></nav>
+  <div class="spacer"></div>
+  <span class="userinfo" id="userInfo"></span>
+  <button class="btn small" id="btnLogout">Keluar</button>
+</header>
+<main class="container">
+  <div class="card">
+    <h2>🧑‍🏫 Catatan Wali Kelas + Kehadiran</h2>
+    <p class="muted" id="periodeInfo"></p>
+    <div id="msg" class="alert hidden"></div>
+    <div class="form-grid">
+      <label class="field">Kelas <select id="kelas"><option value="">— pilih —</option></select></label>
+    </div>
+    <div class="toolbar">
+      <button class="btn" id="btnMuat" type="button">Muat Daftar Siswa</button>
+      <a class="btn green hidden" id="linkTemplate" href="#">⬇ Unduh Template CSV</a>
+      <input type="file" id="fileCsv" accept=".csv" class="hidden">
+      <button class="btn gold hidden" id="btnImport" type="button">⬆ Import CSV</button>
+    </div>
+    <p class="muted">Template CSV terisi data yang sudah tersimpan — lanjutkan di Excel lalu import kembali. Kolom: <code>nis,nama,catatan_wali,sakit,izin,alpa</code> (nis = kunci pencocokan).</p>
+  </div>
+  <div class="card hidden" id="panelCatatan">
+    <h3>Catatan Wali Kelas <span class="muted" id="infoKelas"></span></h3>
+    <div style="overflow-x:auto">
+    <table class="data">
+      <thead><tr><th>No</th><th>NIS</th><th>Nama</th><th>Catatan Wali Kelas</th><th>S</th><th>I</th><th>A</th></tr></thead>
+      <tbody id="barisCatatan"></tbody>
+    </table>
+    </div>
+    <div class="toolbar">
+      <button class="btn gold" id="btnSimpan" type="button">💾 Simpan Catatan</button>
+    </div>
+    <div id="hasilSimpan"></div>
+  </div>
+</main>
+<script src="/js/common.js"></script>
+<script>
+async function init(user) {
+  let daftar = [];
+  if (user.role === "admin") {
+    const r = await api("/api/admin/kelas");
+    daftar = r.ok ? r.data.kelas : [];
+  } else {
+    daftar = user.wali_kelas || [];
+  }
+  document.getElementById("kelas").innerHTML = '<option value="">— pilih —</option>' +
+    daftar.map(k => `<option value="${k.id}">${esc(k.nama)}</option>`).join("");
+  return daftar.length;
+}
+
+async function muat() {
+  hideMsg("msg");
+  document.getElementById("hasilSimpan").innerHTML = "";
+  const kelas_id = document.getElementById("kelas").value;
+  if (!kelas_id) return showMsg("msg", "Pilih kelas dulu.", "error");
+  const r = await api(`/api/catatan/wali?kelas_id=${kelas_id}`);
+  if (!r.ok) return showMsg("msg", (r.data && r.data.error) || "Gagal memuat", "error");
+  const p = r.data.periode;
+  document.getElementById("periodeInfo").textContent =
+    `Semester ${p.semester} — Tahun Ajaran ${p.tahun_ajaran}`;
+  document.getElementById("infoKelas").textContent =
+    `(${document.getElementById("kelas").selectedOptions[0].text})`;
+  document.getElementById("barisCatatan").innerHTML = r.data.siswa.map((s, i) =>
+    `<tr>
+      <td>${i + 1}</td><td>${esc(s.nis)}</td><td>${esc(s.nama)}</td>
+      <td><textarea class="catatan-input" data-catatan="${s.siswa_id}" placeholder="—">${esc(s.catatan_wali || "")}</textarea></td>
+      <td><input type="number" min="0" step="1" class="hadir-input" data-hadir="sakit" data-siswa="${s.siswa_id}" value="${s.sakit ?? 0}"></td>
+      <td><input type="number" min="0" step="1" class="hadir-input" data-hadir="izin" data-siswa="${s.siswa_id}" value="${s.izin ?? 0}"></td>
+      <td><input type="number" min="0" step="1" class="hadir-input" data-hadir="alpa" data-siswa="${s.siswa_id}" value="${s.alpa ?? 0}"></td>
+    </tr>`).join("");
+  const tpl = document.getElementById("linkTemplate");
+  tpl.href = `/api/catatan/wali/template?kelas_id=${kelas_id}`;
+  tpl.classList.remove("hidden");
+  document.getElementById("fileCsv").classList.remove("hidden");
+  document.getElementById("btnImport").classList.remove("hidden");
+  document.getElementById("panelCatatan").classList.remove("hidden");
+}
+
+function kumpulkan() {
+  const rows = [];
+  document.querySelectorAll("[data-catatan]").forEach(ta => {
+    const siswa_id = Number(ta.dataset.catatan);
+    const ambil = (k) => {
+      const el = document.querySelector(`[data-hadir="${k}"][data-siswa="${siswa_id}"]`);
+      return el ? el.value : "";
+    };
+    rows.push({
+      siswa_id,
+      catatan_wali: ta.value,
+      sakit: ambil("sakit"),
+      izin: ambil("izin"),
+      alpa: ambil("alpa"),
+    });
+  });
+  return rows;
+}
+
+function tampilHasil(box, data) {
+  box.innerHTML = `<div class="alert ok">Tersimpan: ${data.tersimpan ?? data.sukses} data.` +
+    (data.gagal && data.gagal.length
+      ? `<br>Perlu perhatian:<ul>${data.gagal.map(g =>
+          `<li>${typeof g === "string" ? esc(g) : `Baris ${g.baris}: ${esc(g.alasan)}`}</li>`).join("")}</ul>`
+      : "") + `</div>`;
+}
+
+(async () => {
+  const user = await requireLogin(["guru", "admin"]);
+  if (!user) return;
+  if (user.role === "guru" && !(user.wali_kelas && user.wali_kelas.length)) {
+    showMsg("msg", "Anda bukan wali kelas mana pun. Minta admin menetapkan Anda sebagai wali kelas.", "error");
+    return;
+  }
+  await init(user);
+  document.getElementById("kelas").addEventListener("change", () => {
+    document.getElementById("panelCatatan").classList.add("hidden");
+  });
+  document.getElementById("btnMuat").addEventListener("click", muat);
+  document.getElementById("btnSimpan").addEventListener("click", async () => {
+    const kelas_id = Number(document.getElementById("kelas").value);
+    const r = await api("/api/catatan/wali", {
+      method: "PUT",
+      body: JSON.stringify({ kelas_id, rows: kumpulkan() }),
+    });
+    const box = document.getElementById("hasilSimpan");
+    if (r.ok) { tampilHasil(box, r.data); muat(); }
+    else box.innerHTML = `<div class="alert error">${esc((r.data && r.data.error) || "Gagal menyimpan")}</div>`;
+  });
+  document.getElementById("btnImport").addEventListener("click", async () => {
+    const f = document.getElementById("fileCsv").files[0];
+    if (!f) return showMsg("msg", "Pilih file CSV dulu.", "error");
+    const kelas_id = document.getElementById("kelas").value;
+    const fd = new FormData();
+    fd.append("file", f);
+    const res = await fetch(`/api/catatan/wali/import?kelas_id=${kelas_id}`, { method: "POST", body: fd });
+    const data = await res.json();
+    const box = document.getElementById("hasilSimpan");
+    if (res.ok) { tampilHasil(box, data); muat(); }
+    else box.innerHTML = `<div class="alert error">${esc(data.error || "Import gagal")}</div>`;
+  });
+})();
+</script>
+</body>
+</html>

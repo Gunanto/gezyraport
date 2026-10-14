@@ -122,6 +122,7 @@ raport.get("/raport", (c) => {
     sekolah: {
       nama: desain?.nama_sekolah || "",
       alamat: desain?.alamat_sekolah || "",
+      kop: desain?.kop_path || null,
     },
   });
 });

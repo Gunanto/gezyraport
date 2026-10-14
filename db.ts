@@ -2,6 +2,7 @@ import { Database } from "bun:sqlite";
 import { mkdirSync, existsSync } from "node:fs";
 
 if (!existsSync("data")) mkdirSync("data", { recursive: true });
+if (!existsSync("data/uploads")) mkdirSync("data/uploads", { recursive: true });
 
 export const db = new Database("data/raport.db");
 db.exec("PRAGMA journal_mode = WAL;");
@@ -98,3 +99,15 @@ CREATE TABLE IF NOT EXISTS sessions (
   expires_at INTEGER NOT NULL
 );
 `);
+
+/* ---------- Migrasi non-destruktif Fase 2 ----------
+   Kolom peran guru (is_bk, is_ekskul). Aman untuk DB lama:
+   hanya ALTER bila kolom belum ada. */
+function kolomAda(tabel: string, kolom: string): boolean {
+  const info = db.query(`PRAGMA table_info(${tabel})`).all() as any[];
+  return info.some((c) => c.name === kolom);
+}
+if (!kolomAda("guru", "is_bk"))
+  db.exec("ALTER TABLE guru ADD COLUMN is_bk INTEGER DEFAULT 0");
+if (!kolomAda("guru", "is_ekskul"))
+  db.exec("ALTER TABLE guru ADD COLUMN is_ekskul INTEGER DEFAULT 0");

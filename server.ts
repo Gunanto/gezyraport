@@ -12,6 +12,7 @@ import {
 import adminRoutes from "./routes/admin";
 import guruRoutes from "./routes/guru";
 import raportRoutes from "./routes/raport";
+import catatanRoutes from "./routes/catatan";
 
 const app = new Hono();
 
@@ -50,16 +51,30 @@ app.get("/api/me", (c) => {
   const u = getSessionUser(c);
   if (!u) return c.json({ error: "Belum login" }, 401);
   const guru = db
-    .query("SELECT id, nama FROM guru WHERE user_id = ?")
+    .query("SELECT id, nama, is_bk, is_ekskul FROM guru WHERE user_id = ?")
     .get(u.id) as any;
   const siswa = db
     .query("SELECT id, nama FROM siswa WHERE user_id = ?")
     .get(u.id) as any;
+  let wali_kelas: any[] = [];
+  let punya_ajar = false;
+  if (guru) {
+    wali_kelas = db
+      .query("SELECT id, nama FROM kelas WHERE wali_guru_id = ? ORDER BY nama")
+      .all(guru.id);
+    punya_ajar = !!db
+      .query("SELECT 1 FROM guru_mapel WHERE guru_id = ? LIMIT 1")
+      .get(guru.id);
+  }
   return c.json({
     user: {
       ...u,
       guru_id: guru?.id ?? null,
       guru_nama: guru?.nama ?? null,
+      is_bk: !!guru?.is_bk,
+      is_ekskul: !!guru?.is_ekskul,
+      wali_kelas,
+      punya_ajar,
       siswa_id: siswa?.id ?? null,
       siswa_nama: siswa?.nama ?? null,
     },
@@ -69,7 +84,25 @@ app.get("/api/me", (c) => {
 // ---------- API routes ----------
 app.route("/api/admin", adminRoutes);
 app.route("/api/guru", guruRoutes);
+app.route("/api/catatan", catatanRoutes);
 app.route("/api", raportRoutes);
+
+// ---------- File upload (kop raport dkk.) ----------
+app.get("/uploads/*", async (c) => {
+  const nama = c.req.path.replace(/^\/uploads\//, "");
+  // hanya file gambar di root folder uploads, tanpa subdirektori
+  if (
+    !nama ||
+    nama.includes("..") ||
+    nama.includes("/") ||
+    nama.includes("\\") ||
+    !/\.(png|jpe?g)$/i.test(nama)
+  )
+    return c.json({ error: "Tidak ditemukan" }, 404);
+  const f = Bun.file(`./data/uploads/${nama}`);
+  if (!(await f.exists())) return c.json({ error: "Tidak ditemukan" }, 404);
+  return new Response(f);
+});
 
 // ---------- Static frontend ----------
 app.get("/", (c) => new Response(Bun.file("./public/index.html")));

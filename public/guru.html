@@ -25,6 +25,8 @@
         <label class="field">Password <span class="muted">(wajib saat tambah baru)</span> <input id="password" type="password"></label>
         <label class="field">Nama Lengkap <input id="nama" required></label>
         <label class="field">NIP <input id="nip"></label>
+        <label class="field checkbox"><input type="checkbox" id="is_bk"> Guru BK</label>
+        <label class="field checkbox"><input type="checkbox" id="is_ekskul"> Pembina Ekskul</label>
       </div>
       <div class="toolbar">
         <button class="btn" type="submit" id="btnSimpan">Tambah</button>
@@ -36,7 +38,7 @@
     <h3>Daftar Guru</h3>
     <div style="overflow-x:auto">
     <table class="data" id="tabelGuru">
-      <thead><tr><th>Nama</th><th>NIP</th><th>Username</th><th>Mengajar</th><th>Aksi</th></tr></thead>
+      <thead><tr><th>Nama</th><th>NIP</th><th>Username</th><th>Peran</th><th>Mengajar</th><th>Aksi</th></tr></thead>
       <tbody></tbody>
     </table>
     </div>
@@ -65,16 +67,20 @@ async function muat() {
   const r = await api("/api/admin/guru");
   if (!r.ok) return showMsg("msg", "Gagal memuat guru", "error");
   daftar = r.data.guru;
-  document.querySelector("#tabelGuru tbody").innerHTML = daftar.map(g =>
-    `<tr>
+  document.querySelector("#tabelGuru tbody").innerHTML = daftar.map(g => {
+    const peran = (g.is_bk ? '<span class="badge">BK</span>' : "") +
+      (g.is_ekskul ? '<span class="badge gold">Ekskul</span>' : "");
+    return `<tr>
       <td>${esc(g.nama)}</td><td>${esc(g.nip || "-")}</td><td>${esc(g.username || "-")}</td>
+      <td>${peran || '<span class="muted">—</span>'}</td>
       <td>${g.jml_ajar} pasangan</td>
       <td>
         <button class="btn small" onclick="mulaiEdit(${g.id})">Ubah</button>
         <button class="btn small gold" onclick="bukaAjar(${g.id})">Mengajar</button>
         <button class="btn small red" onclick="hapus(${g.id}, '${esc(g.nama)}')">Hapus</button>
       </td>
-    </tr>`).join("");
+    </tr>`;
+  }).join("");
 }
 async function muatRef() {
   const [rm, rk] = await Promise.all([api("/api/admin/mapel"), api("/api/admin/kelas")]);
@@ -94,6 +100,8 @@ function mulaiEdit(id) {
   document.getElementById("password").value = "";
   document.getElementById("nama").value = g.nama;
   document.getElementById("nip").value = g.nip || "";
+  document.getElementById("is_bk").checked = !!g.is_bk;
+  document.getElementById("is_ekskul").checked = !!g.is_ekskul;
   document.getElementById("btnSimpan").textContent = "Simpan Perubahan";
   document.getElementById("btnBatal").classList.remove("hidden");
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -143,6 +151,8 @@ function hapusAjar(i) { ajarList.splice(i, 1); renderAjar(); }
     const payload = {
       nama: document.getElementById("nama").value.trim(),
       nip: document.getElementById("nip").value.trim() || null,
+      is_bk: document.getElementById("is_bk").checked,
+      is_ekskul: document.getElementById("is_ekskul").checked,
     };
     let r;
     if (id) {

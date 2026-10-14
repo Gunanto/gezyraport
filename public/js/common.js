@@ -8,17 +8,37 @@ const NAVS = {
     ["Kelas", "/kelas.html"],
     ["Siswa", "/siswa.html"],
     ["Mapel", "/mapel.html"],
-  ],
-  guru: [
-    ["Beranda", "/"],
-    ["Rentang Nilai", "/rentang.html"],
-    ["Input Nilai", "/nilai.html"],
+    ["Desain Raport", "/desain.html"],
   ],
   siswa: [
     ["Beranda", "/"],
     ["Raport Saya", "/raport.html"],
   ],
 };
+
+/** Menu guru disusun dinamis — hanya tampil bila relevan dengan perannya. */
+function navGuru(user) {
+  const items = [["Beranda", "/"]];
+  if (user.punya_ajar) {
+    items.push(
+      ["Rentang Nilai", "/rentang.html"],
+      ["Input Nilai", "/nilai.html"],
+      ["Catatan Guru", "/catatan-guru.html"]
+    );
+  }
+  if (user.wali_kelas && user.wali_kelas.length)
+    items.push(["Catatan Wali", "/wali.html"]);
+  if (user.is_bk) items.push(["Catatan BK", "/bk.html"]);
+  if (user.is_ekskul) items.push(["Catatan Ekskul", "/ekskul.html"]);
+  return items;
+}
+
+/** Daftar menu untuk seorang user (dipakai nav atas & grid beranda). */
+function navItems(user) {
+  if (!user) return [];
+  if (user.role === "guru") return navGuru(user);
+  return NAVS[user.role] || [];
+}
 
 const ROLE_NAMES = { admin: "Admin", guru: "Guru", siswa: "Siswa/Ortu" };
 
@@ -39,10 +59,10 @@ async function api(path, opts = {}) {
   return { ok: res.ok, status: res.status, data };
 }
 
-function buildNav(role) {
+function buildNav(user) {
   const nav = document.getElementById("nav");
   if (!nav) return;
-  const items = NAVS[role] || [];
+  const items = navItems(user);
   const here = location.pathname;
   nav.innerHTML = items
     .map(([label, href]) =>
@@ -67,7 +87,7 @@ async function requireLogin(roles) {
     const nama = user.guru_nama || user.siswa_nama || user.username;
     info.textContent = `${nama} (${ROLE_NAMES[user.role] || user.role})`;
   }
-  buildNav(user.role);
+  buildNav(user);
   const btn = document.getElementById("btnLogout");
   if (btn) btn.onclick = logout;
   return user;

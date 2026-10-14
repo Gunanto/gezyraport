@@ -1,6 +1,6 @@
 # 🎓 GezyRaport
 
-Aplikasi raport digital untuk **SMP Negeri 1 Punggur** — MVP Fase 1.
+Aplikasi raport digital untuk **SMP Negeri 1 Punggur** — Fase 1 (MVP) + Fase 2 selesai.
 
 Stack: **Bun + Hono + bun:sqlite** (mode WAL), satu proses. Frontend: HTML + CSS + JS vanilla (tanpa framework, tanpa CDN), diserve langsung oleh Hono dari `./public`.
 
@@ -35,6 +35,26 @@ Akun siswa dibuat otomatis: username & password = **NIS**.
 
 Predikat dihitung otomatis dari rentang yang ditetapkan guru; bila guru belum menetapkan, dipakai bawaan: 0–69 Kurang/Remedial, 70–79 Tercapai/Cukup, 80–89 Baik, 90–100 Amat Baik/Pengayaan.
 
+## Alur pakai (Fase 2)
+
+4. **Admin** → **Guru**: centang **Guru BK** / **Pembina Ekskul** bila perlu; → **Desain Raport**: isi nama sekolah, kepala sekolah + NIP, kota, periode aktif; upload gambar kop raport (PNG/JPEG ≤ 2 MB).
+5. **Wali kelas** → **Catatan Wali Kelas**: isi catatan + kehadiran S/I/A per siswa (bisa lewat form atau template/import CSV).
+6. **Guru BK** → **Catatan BK** | **Pembina ekskul** → **Catatan Ekskul** | **Guru mapel** → **Catatan Guru** — masing-masing per kelas (form atau CSV).
+7. Menu di beranda menyesuaikan peran guru yang login (wali/BK/ekskul/pengajar).
+
+### Format CSV catatan (import/export)
+
+Kolom `nama` hanya referensi; pencocokan saat import memakai `nis` (harus siswa di kelas yang dipilih). Hanya kolom milik fitur itu yang diupdate:
+
+| Fitur | Kolom CSV |
+|---|---|
+| BK | `nis,nama,catatan_bk` |
+| Wali kelas | `nis,nama,catatan_wali,sakit,izin,alpa` |
+| Ekskul | `nis,nama,catatan_ekskul` |
+| Guru mapel | `nis,nama,catatan_guru` |
+
+Template CSV terisi data yang sudah tersimpan (sekaligus export). Saat import: teks kosong = hapus catatan; angka kehadiran kosong = pertahankan nilai lama; `sakit/izin/alpa` harus angka bulat ≥ 0. Baris gagal dilaporkan per baris beserta alasannya.
+
 ## Struktur folder
 
 ```
@@ -45,17 +65,21 @@ gezyraport/
 ├── auth.ts          # session cookie + middleware requireRole
 ├── util.ts          # CSV, predikat, tanggal Indonesia, periode aktif
 ├── routes/
-│   ├── admin.ts     # CRUD user/mapel/kelas/siswa/guru, import/export CSV
+│   ├── admin.ts     # CRUD user/mapel/kelas/siswa/guru, import/export CSV, desain + kop
 │   ├── guru.ts      # rentang nilai, input nilai, template/import CSV
+│   ├── catatan.ts   # catatan wali/BK/ekskul/guru + template/import CSV (guard peran)
 │   └── raport.ts    # GET /api/raport (dengan guard peran)
 ├── public/
 │   ├── css/style.css  (termasuk @media print untuk cetak raport)
-│   ├── js/common.js   # nav, esc() anti-XSS, helper fetch
+│   ├── js/common.js   # nav dinamis per peran, esc() anti-XSS, helper fetch
 │   ├── login.html, index.html
-│   ├── users.html, guru.html, kelas.html, siswa.html, mapel.html  (admin)
-│   ├── rentang.html, nilai.html                                   (guru)
-│   └── raport.html, cetak.html                                    (siswa/umum)
-└── data/raport.db   # database sqlite (dibuat otomatis)
+│   ├── users.html, guru.html, kelas.html, siswa.html, mapel.html, desain.html (admin)
+│   ├── rentang.html, nilai.html, wali.html, bk.html, ekskul.html,
+│   │   catatan-guru.html                                         (guru)
+│   └── raport.html, cetak.html                                   (siswa/umum)
+├── data/
+│   ├── raport.db    # database sqlite (dibuat otomatis)
+│   └── uploads/     # gambar kop raport (kop.png / kop.jpg)
 ```
 
 ## Deploy VPS (contoh systemd)
@@ -78,12 +102,6 @@ WantedBy=multi-user.target
 Lalu: `systemctl enable --now gezyraport`. Backup cukup dengan menyalin `data/raport.db`.
 
 ## Yang BELUM dikerjakan
-
-**Fase 2** (input oleh peran terkait + desain cetak):
-- Input catatan BK / wali kelas / ekstrakurikuler / guru
-- Input kehadiran S/I/A
-- Upload gambar kop raport
-- CRUD desain raport (nama+NIP kepala sekolah, kota, periode aktif)
 
 **Fase 3**:
 - Arsip multi-semester

@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { db } from "../db";
 import { requireRole } from "../auth";
 import { parseCSV, csvField } from "../util";
+import { existsSync, mkdirSync, unlinkSync } from "node:fs";
 
 const admin = new Hono();
 admin.use(requireRole("admin"));
@@ -455,7 +456,8 @@ admin.get("/guru", (c) => {
 });
 
 admin.post("/guru", async (c) => {
-  const { username, password, nama, nip } = await c.req.json();
+  const { username, password, nama, nip, is_bk, is_ekskul } =
+    await c.req.json();
   if (!username || !password || !nama)
     return c.json({ error: "Username, password, dan nama wajib diisi" }, 400);
   const hash = await Bun.password.hash(String(password));
@@ -467,8 +469,10 @@ admin.post("/guru", async (c) => {
       .run(String(username).trim(), hash, "guru");
     const uid = Number(ur.lastInsertRowid);
     const gr = db
-      .query("INSERT INTO guru (user_id, nama, nip) VALUES (?,?,?)")
-      .run(uid, nama, nip || null);
+      .query(
+        "INSERT INTO guru (user_id, nama, nip, is_bk, is_ekskul) VALUES (?,?,?,?,?)"
+      )
+      .run(uid, nama, nip || null, is_bk ? 1 : 0, is_ekskul ? 1 : 0);
     return c.json({ ok: true, id: Number(gr.lastInsertRowid) });
   } catch {
     return c.json({ error: "Username sudah dipakai" }, 400);
@@ -477,12 +481,17 @@ admin.post("/guru", async (c) => {
 
 admin.put("/guru/:id", async (c) => {
   const id = c.req.param("id");
-  const { nama, nip } = await c.req.json();
+  const { nama, nip, is_bk, is_ekskul } = await c.req.json();
   const ada = db.query("SELECT id FROM guru WHERE id = ?").get(id);
   if (!ada) return c.json({ error: "Guru tidak ditemukan" }, 404);
-  db.query("UPDATE guru SET nama = COALESCE(?, nama), nip = ? WHERE id = ?").run(
+  db.query(
+    `UPDATE guru SET nama = COALESCE(?, nama), nip = ?,
+     is_bk = COALESCE(?, is_bk), is_ekskul = COALESCE(?, is_ekskul) WHERE id = ?`
+  ).run(
     nama ?? null,
     nip ?? null,
+    is_bk === undefined ? null : is_bk ? 1 : 0,
+    is_ekskul === undefined ? null : is_ekskul ? 1 : 0,
     id
   );
   return c.json({ ok: true });
@@ -540,6 +549,88 @@ admin.put("/guru/:id/ajar", async (c) => {
   });
   ganti();
   return c.json({ ok: true, jumlah: daftar.length });
+});
+
+/* ================= DESAIN RAPORT ================= */
+
+admin.get("/desain", (c) => {
+  const d = db.query("SELECT * FROM desain_raport WHERE id = 1").get();
+  if (!d) return c.json({ error: "Desain belum diinisialisasi" }, 404);
+  return c.json({ desain: d });
+});
+
+admin.put("/desain", async (c) => {
+  const {
+    nama_sekolah,
+    alamat_sekolah,
+    kepala_nama,
+    kepala_nip,
+    kota,
+    semester_aktif,
+    tahun_ajaran_aktif,
+  } = await c.req.json();
+  db.query(
+    `UPDATE desain_raport SET
+       nama_sekolah = COALESCE(?, nama_sekolah),
+       alamat_sekolah = ?,
+       kepala_nama = ?,
+       kepala_nip = ?,
+       kota = ?,
+       semester_aktif = COALESCE(?, semester_aktif),
+       tahun_ajaran_aktif = COALESCE(?, tahun_ajaran_aktif)
+     WHERE id = 1`
+  ).run(
+    nama_sekolah ?? null,
+    alamat_sekolah ?? null,
+    kepala_nama ?? null,
+    kepala_nip ?? null,
+    kota ?? null,
+    semester_aktif ?? null,
+    tahun_ajaran_aktif ?? null
+  );
+  return c.json({ ok: true });
+});
+
+const KOP_DIR = "data/uploads";
+const KOP_FILES = ["kop.png", "kop.jpg", "kop.jpeg"];
+
+function hapusKopLama() {
+  for (const f of KOP_FILES) {
+    try {
+      unlinkSync(`${KOP_DIR}/${f}`);
+    } catch {
+      /* belum ada — abaikan */
+    }
+  }
+}
+
+/** Upload gambar kop raport (PNG/JPEG, maks 2MB). File lama ditimpa. */
+admin.post("/desain/kop", async (c) => {
+  const body = await c.req.parseBody();
+  const file = body["file"];
+  if (!file || typeof file === "string")
+    return c.json({ error: "File gambar tidak ditemukan" }, 400);
+  const f = file as File;
+  const tipe = (f.type || "").toLowerCase();
+  if (tipe !== "image/png" && tipe !== "image/jpeg")
+    return c.json({ error: "Hanya file PNG atau JPEG yang diterima" }, 400);
+  if (f.size > 2 * 1024 * 1024)
+    return c.json({ error: "Ukuran file maksimal 2 MB" }, 400);
+  const ext = tipe === "image/png" ? "png" : "jpg";
+  const nama = `kop.${ext}`;
+  if (!existsSync(KOP_DIR)) mkdirSync(KOP_DIR, { recursive: true });
+  hapusKopLama();
+  await Bun.write(`${KOP_DIR}/${nama}`, f);
+  const kop_path = `/uploads/${nama}`;
+  db.query("UPDATE desain_raport SET kop_path = ? WHERE id = 1").run(kop_path);
+  return c.json({ ok: true, kop_path });
+});
+
+/** Hapus gambar kop raport. */
+admin.delete("/desain/kop", (c) => {
+  hapusKopLama();
+  db.query("UPDATE desain_raport SET kop_path = NULL WHERE id = 1").run();
+  return c.json({ ok: true });
 });
 
 export default admin;

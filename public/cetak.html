@@ -29,11 +29,14 @@ function renderCetak(d) {
   const jk = id.jenis_kelamin === "L" ? "Laki-laki" : id.jenis_kelamin === "P" ? "Perempuan" : "-";
   const cat = d.catatan || {};
   const ttd = d.ttd;
-  return `
-  <div class="kop">
+  const kopHtml = d.sekolah.kop
+    ? `<div class="kop"><img src="${esc(d.sekolah.kop)}" alt="Kop raport" class="kop-img"></div>`
+    : `<div class="kop">
     <h2>${esc(d.sekolah.nama || "SMP NEGERI 1 PUNGGUR")}</h2>
     ${d.sekolah.alamat ? `<p>${esc(d.sekolah.alamat)}</p>` : ""}
-  </div>
+  </div>`;
+  return `
+  ${kopHtml}
   <div class="judul-raport"><h3>LAPORAN HASIL BELAJAR PESERTA DIDIK</h3></div>
   <table class="identitas">
     <tr><td style="width:170px">Nama Peserta Didik</td><td style="width:10px">:</td><td><b>${esc(id.nama)}</b></td>
