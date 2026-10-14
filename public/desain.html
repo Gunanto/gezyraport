@@ -32,6 +32,13 @@
           </select>
         </label>
         <label class="field">Tahun Ajaran Aktif <input id="tahun_ajaran_aktif" placeholder="2026/2027"></label>
+        <label class="field" style="grid-column:1/-1">Judul Laporan <input id="judul_raport" placeholder="LAPORAN HASIL BELAJAR PESERTA DIDIK"></label>
+        <label class="field">Tempat (tanda tangan) <input id="tempat" placeholder="Punggur"></label>
+        <label class="field">Tanggal Raport <input id="tanggal_raport" type="date">
+          <span class="muted">Kosongkan = pakai tanggal hari ini.</span></label>
+      </div>
+      <div class="toolbar">
+        <button class="btn small" type="button" id="btnClearTanggal">🧹 Kosongkan Tanggal</button>
       </div>
       <div class="toolbar">
         <button class="btn gold" type="submit">💾 Simpan Desain</button>
@@ -67,10 +74,11 @@ async function muat() {
   const r = await api("/api/admin/desain");
   if (!r.ok) return showMsg("msg", "Gagal memuat desain", "error");
   const d = r.data.desain;
-  for (const k of ["nama_sekolah", "alamat_sekolah", "kepala_nama", "kepala_nip", "kota", "tahun_ajaran_aktif"]) {
+  for (const k of ["nama_sekolah", "alamat_sekolah", "kepala_nama", "kepala_nip", "kota", "tahun_ajaran_aktif", "judul_raport", "tempat"]) {
     document.getElementById(k).value = d[k] || "";
   }
   document.getElementById("semester_aktif").value = d.semester_aktif || "Ganjil";
+  document.getElementById("tanggal_raport").value = d.tanggal_raport || "";
   renderKop(d.kop_path);
 }
 
@@ -81,9 +89,10 @@ async function muat() {
   document.getElementById("formDesain").addEventListener("submit", async (e) => {
     e.preventDefault(); hideMsg("msg");
     const payload = {};
-    for (const k of ["nama_sekolah", "alamat_sekolah", "kepala_nama", "kepala_nip", "kota", "semester_aktif", "tahun_ajaran_aktif"]) {
+    for (const k of ["nama_sekolah", "alamat_sekolah", "kepala_nama", "kepala_nip", "kota", "semester_aktif", "tahun_ajaran_aktif", "judul_raport", "tempat"]) {
       payload[k] = document.getElementById(k).value.trim();
     }
+    payload.tanggal_raport = document.getElementById("tanggal_raport").value; // "" = kosongkan
     if (!payload.nama_sekolah) return showMsg("msg", "Nama sekolah wajib diisi.", "error");
     const r = await api("/api/admin/desain", { method: "PUT", body: JSON.stringify(payload) });
     if (r.ok) showMsg("msg", "Desain tersimpan.", "ok");
@@ -99,6 +108,10 @@ async function muat() {
     const data = await res.json();
     if (res.ok) { showMsg("msgKop", "Kop berhasil diupload.", "ok"); renderKop(data.kop_path); }
     else showMsg("msgKop", data.error || "Upload gagal", "error");
+  });
+  document.getElementById("btnClearTanggal").addEventListener("click", () => {
+    document.getElementById("tanggal_raport").value = "";
+    showMsg("msg", "Tanggal dikosongkan — raport akan memakai tanggal hari ini. Klik Simpan Desain.", "ok");
   });
   document.getElementById("btnHapusKop").addEventListener("click", async () => {
     if (!await confirmHapus("Hapus gambar kop raport?")) return;

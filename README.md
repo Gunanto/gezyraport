@@ -101,9 +101,18 @@ WantedBy=multi-user.target
 
 Lalu: `systemctl enable --now gezyraport`. Backup cukup dengan menyalin `data/raport.db`.
 
+## Judul & tempat/tanggal raport (bisa diubah admin)
+
+**Admin** → **Desain Raport**: **Judul Laporan** (mis. `LAPORAN HASIL ASESMEN SUMATIF TENGAH SEMESTER GANJIL`), **Tempat**, dan **Tanggal** (kosongkan = pakai tanggal hari ini). Judul dan baris `Tempat, Tanggal` di halaman cetak mengikuti isian ini.
+
+## Leger nilai per kelas
+
+**Admin** → **Guru**: centang **Staff** + isi **Jabatan** (mis. Kepala Sekolah, Waka Kurikulum) untuk memberi akses leger penuh. Menu **Leger Nilai** muncul untuk admin, staf, dan wali kelas (wali hanya kelasnya sendiri).
+
+Halaman leger menampilkan matriks No/NIS/Nama × 12 mapel + rata-rata (predikat otomatis, sel diwarnai), dengan tombol **Export CSV** (`nis,nama,<kode mapel>,rata2`) dan **Cetak** (landscape).
+
 ## Yang BELUM dikerjakan
 
 **Fase 3**:
 - Arsip multi-semester
-- Rekap/leger nilai per kelas
 - Backup otomatis database

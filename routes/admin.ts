@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { db } from "../db";
 import { requireRole } from "../auth";
-import { parseCSV, csvField } from "../util";
+import { parseCSV, csvField, validTanggalISO } from "../util";
 import { existsSync, mkdirSync, unlinkSync } from "node:fs";
 
 const admin = new Hono();
@@ -456,10 +456,12 @@ admin.get("/guru", (c) => {
 });
 
 admin.post("/guru", async (c) => {
-  const { username, password, nama, nip, is_bk, is_ekskul } =
+  const { username, password, nama, nip, is_bk, is_ekskul, is_staf, jabatan } =
     await c.req.json();
   if (!username || !password || !nama)
     return c.json({ error: "Username, password, dan nama wajib diisi" }, 400);
+  if (is_staf && !String(jabatan || "").trim())
+    return c.json({ error: "Jabatan wajib diisi bila Staff dicentang" }, 400);
   const hash = await Bun.password.hash(String(password));
   try {
     const ur = db
@@ -470,9 +472,17 @@ admin.post("/guru", async (c) => {
     const uid = Number(ur.lastInsertRowid);
     const gr = db
       .query(
-        "INSERT INTO guru (user_id, nama, nip, is_bk, is_ekskul) VALUES (?,?,?,?,?)"
+        "INSERT INTO guru (user_id, nama, nip, is_bk, is_ekskul, is_staf, jabatan) VALUES (?,?,?,?,?,?,?)"
       )
-      .run(uid, nama, nip || null, is_bk ? 1 : 0, is_ekskul ? 1 : 0);
+      .run(
+        uid,
+        nama,
+        nip || null,
+        is_bk ? 1 : 0,
+        is_ekskul ? 1 : 0,
+        is_staf ? 1 : 0,
+        is_staf ? String(jabatan).trim() : null
+      );
     return c.json({ ok: true, id: Number(gr.lastInsertRowid) });
   } catch {
     return c.json({ error: "Username sudah dipakai" }, 400);
@@ -481,17 +491,26 @@ admin.post("/guru", async (c) => {
 
 admin.put("/guru/:id", async (c) => {
   const id = c.req.param("id");
-  const { nama, nip, is_bk, is_ekskul } = await c.req.json();
-  const ada = db.query("SELECT id FROM guru WHERE id = ?").get(id);
-  if (!ada) return c.json({ error: "Guru tidak ditemukan" }, 404);
+  const { nama, nip, is_bk, is_ekskul, is_staf, jabatan } = await c.req.json();
+  const cur = db.query("SELECT * FROM guru WHERE id = ?").get(id) as any;
+  if (!cur) return c.json({ error: "Guru tidak ditemukan" }, 404);
+  // jabatan wajib bila hasil akhirnya berstatus staf
+  const stafAkhir = is_staf === undefined ? !!cur.is_staf : !!is_staf;
+  const jabatanAkhir =
+    jabatan === undefined ? cur.jabatan : String(jabatan || "").trim() || null;
+  if (stafAkhir && !jabatanAkhir)
+    return c.json({ error: "Jabatan wajib diisi bila Staff dicentang" }, 400);
   db.query(
     `UPDATE guru SET nama = COALESCE(?, nama), nip = ?,
-     is_bk = COALESCE(?, is_bk), is_ekskul = COALESCE(?, is_ekskul) WHERE id = ?`
+     is_bk = COALESCE(?, is_bk), is_ekskul = COALESCE(?, is_ekskul),
+     is_staf = COALESCE(?, is_staf), jabatan = ? WHERE id = ?`
   ).run(
     nama ?? null,
     nip ?? null,
     is_bk === undefined ? null : is_bk ? 1 : 0,
     is_ekskul === undefined ? null : is_ekskul ? 1 : 0,
+    is_staf === undefined ? null : is_staf ? 1 : 0,
+    jabatanAkhir,
     id
   );
   return c.json({ ok: true });
@@ -568,25 +587,56 @@ admin.put("/desain", async (c) => {
     kota,
     semester_aktif,
     tahun_ajaran_aktif,
+    judul_raport,
+    tempat,
+    tanggal_raport,
   } = await c.req.json();
-  db.query(
-    `UPDATE desain_raport SET
-       nama_sekolah = COALESCE(?, nama_sekolah),
-       alamat_sekolah = ?,
-       kepala_nama = ?,
-       kepala_nip = ?,
-       kota = ?,
-       semester_aktif = COALESCE(?, semester_aktif),
-       tahun_ajaran_aktif = COALESCE(?, tahun_ajaran_aktif)
-     WHERE id = 1`
-  ).run(
+  // tanggal_raport: undefined = tidak diubah; "" = kosongkan (pakai tanggal hari ini);
+  // selain itu harus format YYYY-MM-DD yang valid.
+  let tglMode: "keep" | "clear" | "set" = "keep";
+  let tglVal: string | null = null;
+  if (tanggal_raport !== undefined) {
+    const t = String(tanggal_raport).trim();
+    if (t === "") tglMode = "clear";
+    else if (!validTanggalISO(t))
+      return c.json(
+        { error: "Format tanggal tidak valid (pakai YYYY-MM-DD)" },
+        400
+      );
+    else {
+      tglMode = "set";
+      tglVal = t;
+    }
+  }
+  const sets = [
+    "nama_sekolah = COALESCE(?, nama_sekolah)",
+    "alamat_sekolah = ?",
+    "kepala_nama = ?",
+    "kepala_nip = ?",
+    "kota = ?",
+    "semester_aktif = COALESCE(?, semester_aktif)",
+    "tahun_ajaran_aktif = COALESCE(?, tahun_ajaran_aktif)",
+    "judul_raport = COALESCE(?, judul_raport)",
+    "tempat = COALESCE(?, tempat)",
+  ];
+  const params: any[] = [
     nama_sekolah ?? null,
     alamat_sekolah ?? null,
     kepala_nama ?? null,
     kepala_nip ?? null,
     kota ?? null,
     semester_aktif ?? null,
-    tahun_ajaran_aktif ?? null
+    tahun_ajaran_aktif ?? null,
+    judul_raport ? String(judul_raport).trim() || null : null,
+    tempat ? String(tempat).trim() || null : null,
+  ];
+  if (tglMode === "clear") sets.push("tanggal_raport = NULL");
+  else if (tglMode === "set") {
+    sets.push("tanggal_raport = ?");
+    params.push(tglVal);
+  }
+  db.query(`UPDATE desain_raport SET ${sets.join(", ")} WHERE id = 1`).run(
+    ...params
   );
   return c.json({ ok: true });
 });

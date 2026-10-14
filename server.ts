@@ -13,6 +13,7 @@ import adminRoutes from "./routes/admin";
 import guruRoutes from "./routes/guru";
 import raportRoutes from "./routes/raport";
 import catatanRoutes from "./routes/catatan";
+import legerRoutes from "./routes/leger";
 
 const app = new Hono();
 
@@ -51,7 +52,9 @@ app.get("/api/me", (c) => {
   const u = getSessionUser(c);
   if (!u) return c.json({ error: "Belum login" }, 401);
   const guru = db
-    .query("SELECT id, nama, is_bk, is_ekskul FROM guru WHERE user_id = ?")
+    .query(
+      "SELECT id, nama, is_bk, is_ekskul, is_staf, jabatan FROM guru WHERE user_id = ?"
+    )
     .get(u.id) as any;
   const siswa = db
     .query("SELECT id, nama FROM siswa WHERE user_id = ?")
@@ -73,7 +76,10 @@ app.get("/api/me", (c) => {
       guru_nama: guru?.nama ?? null,
       is_bk: !!guru?.is_bk,
       is_ekskul: !!guru?.is_ekskul,
+      is_staf: !!guru?.is_staf,
+      jabatan: guru?.jabatan ?? null,
       wali_kelas,
+      kelas_wali: wali_kelas,
       punya_ajar,
       siswa_id: siswa?.id ?? null,
       siswa_nama: siswa?.nama ?? null,
@@ -85,6 +91,7 @@ app.get("/api/me", (c) => {
 app.route("/api/admin", adminRoutes);
 app.route("/api/guru", guruRoutes);
 app.route("/api/catatan", catatanRoutes);
+app.route("/api/leger", legerRoutes);
 app.route("/api", raportRoutes);
 
 // ---------- File upload (kop raport dkk.) ----------

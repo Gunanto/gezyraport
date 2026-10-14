@@ -27,6 +27,8 @@
         <label class="field">NIP <input id="nip"></label>
         <label class="field checkbox"><input type="checkbox" id="is_bk"> Guru BK</label>
         <label class="field checkbox"><input type="checkbox" id="is_ekskul"> Pembina Ekskul</label>
+        <label class="field checkbox"><input type="checkbox" id="is_staf"> Staff (kepala sekolah/waka)</label>
+        <label class="field">Jabatan <span class="muted">(wajib bila Staff dicentang)</span> <input id="jabatan" placeholder="mis. Kepala Sekolah"></label>
       </div>
       <div class="toolbar">
         <button class="btn" type="submit" id="btnSimpan">Tambah</button>
@@ -69,7 +71,8 @@ async function muat() {
   daftar = r.data.guru;
   document.querySelector("#tabelGuru tbody").innerHTML = daftar.map(g => {
     const peran = (g.is_bk ? '<span class="badge">BK</span>' : "") +
-      (g.is_ekskul ? '<span class="badge gold">Ekskul</span>' : "");
+      (g.is_ekskul ? '<span class="badge gold">Ekskul</span>' : "") +
+      (g.is_staf ? `<span class="badge" style="background:#dcfce7;color:#166534">Staf: ${esc(g.jabatan || "")}</span>` : "");
     return `<tr>
       <td>${esc(g.nama)}</td><td>${esc(g.nip || "-")}</td><td>${esc(g.username || "-")}</td>
       <td>${peran || '<span class="muted">—</span>'}</td>
@@ -102,6 +105,8 @@ function mulaiEdit(id) {
   document.getElementById("nip").value = g.nip || "";
   document.getElementById("is_bk").checked = !!g.is_bk;
   document.getElementById("is_ekskul").checked = !!g.is_ekskul;
+  document.getElementById("is_staf").checked = !!g.is_staf;
+  document.getElementById("jabatan").value = g.jabatan || "";
   document.getElementById("btnSimpan").textContent = "Simpan Perubahan";
   document.getElementById("btnBatal").classList.remove("hidden");
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -153,6 +158,8 @@ function hapusAjar(i) { ajarList.splice(i, 1); renderAjar(); }
       nip: document.getElementById("nip").value.trim() || null,
       is_bk: document.getElementById("is_bk").checked,
       is_ekskul: document.getElementById("is_ekskul").checked,
+      is_staf: document.getElementById("is_staf").checked,
+      jabatan: document.getElementById("jabatan").value.trim() || null,
     };
     let r;
     if (id) {

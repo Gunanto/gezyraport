@@ -29,6 +29,8 @@ function renderCetak(d) {
   const jk = id.jenis_kelamin === "L" ? "Laki-laki" : id.jenis_kelamin === "P" ? "Perempuan" : "-";
   const cat = d.catatan || {};
   const ttd = d.ttd;
+  const tempat = ttd.tempat || ttd.kota || "";
+  const tanggalTeks = ttd.tanggal_teks || ttd.tanggal || "";
   const kopHtml = d.sekolah.kop
     ? `<div class="kop"><img src="${esc(d.sekolah.kop)}" alt="Kop raport" class="kop-img"></div>`
     : `<div class="kop">
@@ -37,7 +39,7 @@ function renderCetak(d) {
   </div>`;
   return `
   ${kopHtml}
-  <div class="judul-raport"><h3>LAPORAN HASIL BELAJAR PESERTA DIDIK</h3></div>
+  <div class="judul-raport"><h3>${esc(d.sekolah.judul || "LAPORAN HASIL BELAJAR PESERTA DIDIK")}</h3></div>
   <table class="identitas">
     <tr><td style="width:170px">Nama Peserta Didik</td><td style="width:10px">:</td><td><b>${esc(id.nama)}</b></td>
         <td style="width:150px">Kelas</td><td style="width:10px">:</td><td>${esc(id.kelas || "-")}</td></tr>
@@ -64,7 +66,7 @@ function renderCetak(d) {
   <p><b>Ketidakhadiran:</b> Sakit: ${d.kehadiran.sakit} hari &nbsp; Izin: ${d.kehadiran.izin} hari &nbsp; Tanpa keterangan: ${d.kehadiran.alpa} hari</p>
   <div class="ttd">
     <div class="kolom"></div>
-    <div class="kolom">${esc(ttd.kota)}${ttd.kota ? "," : ""} ${esc(ttd.tanggal)}<br>Kepala Sekolah<br><br><br>
+    <div class="kolom">${esc(tempat)}${tempat ? "," : ""} ${esc(tanggalTeks)}<br>Kepala Sekolah<br><br><br>
       <div class="nama">${esc(ttd.kepala_nama || "........................")}</div>
       ${ttd.kepala_nip ? `NIP. ${esc(ttd.kepala_nip)}` : ""}
     </div>

@@ -1,7 +1,13 @@
 import { Hono } from "hono";
 import { db } from "../db";
 import { requireRole } from "../auth";
-import { periodeAktif, predikatUntuk, tanggalID } from "../util";
+import {
+  periodeAktif,
+  predikatUntuk,
+  tanggalID,
+  tanggalIDdariISO,
+  validTanggalISO,
+} from "../util";
 
 const raport = new Hono();
 raport.use(requireRole("admin", "guru", "siswa"));
@@ -86,6 +92,16 @@ raport.get("/raport", (c) => {
     )
     .get(siswa_id, p.tahun_ajaran, p.semester) as any;
 
+  // ---- Judul, tempat & tanggal (bisa diubah admin di menu Desain) ----
+  const judul =
+    (desain?.judul_raport || "").trim() || "LAPORAN HASIL BELAJAR PESERTA DIDIK";
+  const tempat = (desain?.tempat || "").trim() || (desain?.kota || "").trim();
+  const tglISO =
+    desain?.tanggal_raport && validTanggalISO(desain.tanggal_raport)
+      ? desain.tanggal_raport
+      : null;
+  const tanggalTeks = tglISO ? tanggalIDdariISO(tglISO) : tanggalID();
+
   return c.json({
     identitas: {
       nama: sw.nama,
@@ -118,11 +134,14 @@ raport.get("/raport", (c) => {
       wali_nip: sw.wali_nip || "",
       kota: desain?.kota || "",
       tanggal: tanggalID(),
+      tempat,
+      tanggal_teks: tanggalTeks,
     },
     sekolah: {
       nama: desain?.nama_sekolah || "",
       alamat: desain?.alamat_sekolah || "",
       kop: desain?.kop_path || null,
+      judul,
     },
   });
 });

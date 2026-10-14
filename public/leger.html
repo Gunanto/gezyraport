@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Leger Nilai — GezyRaport</title>
+<link rel="stylesheet" href="/css/style.css">
+<style>
+  @page { size: landscape; }
+  table.leger { border-collapse: collapse; font-size: 12px; width: 100%; }
+  table.leger th, table.leger td { border: 1px solid #000; padding: 4px 6px; white-space: nowrap; }
+  table.leger th { background: #f0f0f0; text-align: center; }
+  table.leger td.angka { text-align: center; }
+  table.leger td.nama { white-space: normal; min-width: 140px; }
+  @media print {
+    .no-print { display: none !important; }
+  }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">🎓 GezyRaport <small>SMPN 1 Punggur</small></div>
+  <nav id="nav"></nav>
+  <div class="spacer"></div>
+  <span class="userinfo" id="userInfo"></span>
+  <button class="btn small" id="btnLogout">Keluar</button>
+</header>
+<main class="container">
+  <div class="card no-print">
+    <h2>📊 Leger Nilai per Kelas</h2>
+    <div id="msg" class="alert hidden"></div>
+    <div class="form-grid">
+      <label class="field">Kelas <select id="pilihKelas"></select></label>
+    </div>
+    <div class="toolbar">
+      <button class="btn" type="button" id="btnExport">⬇ Export CSV</button>
+      <button class="btn gold" type="button" id="btnCetak">🖨 Cetak</button>
+    </div>
+    <p class="muted">Warna sel mengikuti predikat: <span style="background:#ffd6d6;padding:0 .4rem">kurang</span> <span style="background:#fff3c4;padding:0 .4rem">cukup</span> <span style="background:#d6f5d6;padding:0 .4rem">baik</span> <span style="background:#b8e6b8;padding:0 .4rem">amat baik</span>.</p>
+  </div>
+  <div class="card" id="areaLeger">
+    <h3 id="judulLeger">Pilih kelas dulu</h3>
+    <p class="muted no-print" id="periodeLeger"></p>
+    <div style="overflow-x:auto" id="tabelWrap"></div>
+  </div>
+</main>
+<script src="/js/common.js"></script>
+<script>
+let kelasTerpilih = null;
+
+function warnaPredikat(p) {
+  if (!p) return "";
+  const s = String(p).toLowerCase();
+  if (s.includes("kurang") || s.includes("remedial")) return "#ffd6d6";
+  if (s.includes("amat baik") || s.includes("pengayaan")) return "#b8e6b8";
+  if (s.includes("baik")) return "#d6f5d6";
+  if (s.includes("cukup") || s.includes("tercapai")) return "#fff3c4";
+  return "";
+}
+
+function renderLeger(d) {
+  document.getElementById("judulLeger").textContent =
+    `Leger Nilai — Kelas ${d.kelas.nama} — Semester ${d.periode.semester} ${d.periode.tahun_ajaran}`;
+  document.getElementById("periodeLeger").textContent =
+    `${d.siswa.length} siswa × ${d.mapel.length} mapel`;
+  if (!d.siswa.length) {
+    document.getElementById("tabelWrap").innerHTML = '<p class="muted">Belum ada siswa di kelas ini.</p>';
+    return;
+  }
+  const head = `<tr><th>No</th><th>NIS</th><th>Nama</th>` +
+    d.mapel.map(m => `<th title="${esc(m.nama)}">${esc(m.kode)}</th>`).join("") +
+    `<th>Rata2</th></tr>`;
+  const body = d.siswa.map((s, i) => {
+    const sel = d.mapel.map(m => {
+      const v = s.nilai[m.id] || {};
+      const bg = warnaPredikat(v.predikat);
+      const isi = v.angka === null || v.angka === undefined ? "-" : esc(v.angka);
+      return `<td class="angka" style="${bg ? `background:${bg}` : ""}" title="${esc(v.predikat || "")}">${isi}</td>`;
+    }).join("");
+    return `<tr><td class="angka">${i + 1}</td><td>${esc(s.nis)}</td><td class="nama">${esc(s.nama)}</td>${sel}<td class="angka"><b>${s.rata2 === null ? "-" : esc(s.rata2)}</b></td></tr>`;
+  }).join("");
+  document.getElementById("tabelWrap").innerHTML =
+    `<table class="leger"><thead>${head}</thead><tbody>${body}</tbody></table>`;
+}
+
+async function muatKelas() {
+  const r = await api("/api/leger/kelas");
+  if (!r.ok) { showMsg("msg", "Gagal memuat daftar kelas", "error"); return; }
+  const sel = document.getElementById("pilihKelas");
+  if (!r.data.kelas.length) {
+    sel.innerHTML = '<option value="">— tidak ada akses —</option>';
+    document.getElementById("tabelWrap").innerHTML =
+      '<p class="muted">Anda tidak memiliki akses leger nilai.</p>';
+    return;
+  }
+  sel.innerHTML = r.data.kelas
+    .map(k => `<option value="${k.id}">${esc(k.nama)}</option>`).join("");
+  kelasTerpilih = sel.value;
+  await muatLeger();
+}
+
+async function muatLeger() {
+  if (!kelasTerpilih) return;
+  hideMsg("msg");
+  const r = await api(`/api/leger?kelas_id=${kelasTerpilih}`);
+  if (!r.ok) {
+    showMsg("msg", (r.data && r.data.error) || "Gagal memuat leger", "error");
+    document.getElementById("tabelWrap").innerHTML = "";
+    return;
+  }
+  renderLeger(r.data);
+}
+
+(async () => {
+  const user = await requireLogin();
+  if (!user) return;
+  await muatKelas();
+  document.getElementById("pilihKelas").addEventListener("change", (e) => {
+    kelasTerpilih = e.target.value;
+    muatLeger();
+  });
+  document.getElementById("btnExport").addEventListener("click", () => {
+    if (!kelasTerpilih) return;
+    location.href = `/api/leger/export?kelas_id=${kelasTerpilih}`;
+  });
+  document.getElementById("btnCetak").addEventListener("click", () => window.print());
+})();
+</script>
+</body>
+</html>

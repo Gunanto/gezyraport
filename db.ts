@@ -111,3 +111,20 @@ if (!kolomAda("guru", "is_bk"))
   db.exec("ALTER TABLE guru ADD COLUMN is_bk INTEGER DEFAULT 0");
 if (!kolomAda("guru", "is_ekskul"))
   db.exec("ALTER TABLE guru ADD COLUMN is_ekskul INTEGER DEFAULT 0");
+
+/* ---------- Migrasi non-destruktif: judul & tempat/tanggal raport ----------
+   Admin bisa mengubah judul laporan serta tempat/tanggal terbit. */
+if (!kolomAda("desain_raport", "judul_raport"))
+  db.exec(
+    "ALTER TABLE desain_raport ADD COLUMN judul_raport TEXT DEFAULT 'LAPORAN HASIL BELAJAR PESERTA DIDIK'"
+  );
+if (!kolomAda("desain_raport", "tempat"))
+  db.exec("ALTER TABLE desain_raport ADD COLUMN tempat TEXT DEFAULT 'Punggur'");
+if (!kolomAda("desain_raport", "tanggal_raport"))
+  db.exec("ALTER TABLE desain_raport ADD COLUMN tanggal_raport TEXT");
+
+/* ---------- Migrasi non-destruktif: staf (kepala sekolah, waka, dsb.) ---------- */
+if (!kolomAda("guru", "is_staf"))
+  db.exec("ALTER TABLE guru ADD COLUMN is_staf INTEGER DEFAULT 0");
+if (!kolomAda("guru", "jabatan"))
+  db.exec("ALTER TABLE guru ADD COLUMN jabatan TEXT");
