@@ -739,12 +739,27 @@ admin.post("/guru/import", async (c) => {
   const col = (r: string[], k: string) =>
     idx[k] === undefined ? "" : (r[idx[k]] ?? "").trim();
   const adaKolomTugas = idx["mapel"] !== undefined || idx["kelas"] !== undefined;
-  // Sinkronisasi via username: belum ada → tambah; ada & berubah → update; sama persis → abaikan
+  // Sinkronisasi via username: belum ada → tambah; ada & berubah → update; sama persis → abaikan.
+  // Baris-baris dengan username sama digabung: pasangan (mapel, kelas) di-union.
   let sukses = 0,
     dibuat = 0,
     diupdate = 0,
     diabaikan = 0;
   const gagal: string[] = [];
+  type BarisGuru = {
+    nos: number[];
+    username: string;
+    nama: string;
+    nip: string | null;
+    pw: string;
+    is_bk: boolean;
+    is_ekskul: boolean;
+    is_staf: boolean;
+    jabatan: string | null;
+    pasangan: Array<[string, string]>; // [kodeMapel, namaKelas]
+  };
+  // --- Fase 1: baca baris & kelompokkan per username ---
+  const grup = new Map<string, BarisGuru>();
   for (let i = start; i < rows.length; i++) {
     const r = rows[i];
     if (!r.length || r.every((x) => !(x ?? "").trim())) continue;
@@ -763,47 +778,90 @@ admin.post("/guru/import", async (c) => {
       gagal.push(`Baris ${no}: jabatan wajib diisi bila staff=ya`);
       continue;
     }
+    const kodeMapel = col(r, "mapel")
+      .split(";")
+      .map((x) => x.trim())
+      .filter(Boolean);
+    const namaKelas = col(r, "kelas")
+      .split(";")
+      .map((x) => x.trim())
+      .filter(Boolean);
+    const b: BarisGuru = {
+      nos: [no],
+      username,
+      nama,
+      nip: col(r, "nip") || null,
+      pw: col(r, "password"),
+      is_bk,
+      is_ekskul,
+      is_staf,
+      jabatan,
+      pasangan: [],
+    };
+    for (const m of kodeMapel)
+      for (const k of namaKelas)
+        if (!b.pasangan.some(([a, c]) => a === m && c === k))
+          b.pasangan.push([m, k]);
+    const g = grup.get(username);
+    if (!g) grup.set(username, b);
+    else {
+      for (const [m, k] of b.pasangan)
+        if (!g.pasangan.some(([a, c]) => a === m && c === k))
+          g.pasangan.push([m, k]);
+      g.nos.push(no);
+      // field lain ikut baris terakhir (boleh mengoreksi baris sebelumnya)
+      g.nama = b.nama;
+      g.nip = b.nip;
+      g.is_bk = b.is_bk;
+      g.is_ekskul = b.is_ekskul;
+      g.is_staf = b.is_staf;
+      g.jabatan = b.jabatan;
+      if (b.pw) g.pw = b.pw;
+    }
+  }
+  // --- Fase 2: proses tiap guru ---
+  for (const g of grup.values()) {
+    const label =
+      g.nos.length > 1 ? `Baris ${g.nos.join(",")}` : `Baris ${g.nos[0]}`;
+    const { username, nama, nip, pw, is_bk, is_ekskul, is_staf } = g;
+    const jabatan = g.jabatan;
     // validasi mapel & kelas dulu sebelum mengubah apa pun
     let tugas: Array<[number, number]> | null = null;
     if (adaKolomTugas) {
-      const kodeMapel = col(r, "mapel")
-        .split(";")
-        .map((x) => x.trim())
-        .filter(Boolean);
-      const namaKelas = col(r, "kelas")
-        .split(";")
-        .map((x) => x.trim())
-        .filter(Boolean);
-      const mapelIds: number[] = [],
-        kelasIds: number[] = [];
+      tugas = [];
+      const cacheM = new Map<string, number>(),
+        cacheK = new Map<string, number>();
       let batal = false;
-      for (const kd of kodeMapel) {
-        const mm = db
-          .query("SELECT id FROM mapel WHERE LOWER(kode) = LOWER(?)")
-          .get(kd) as any;
-        if (!mm) {
-          gagal.push(`Baris ${no}: kode mapel "${kd}" tidak ditemukan`);
-          batal = true;
-          break;
+      for (const [kd, nk] of g.pasangan) {
+        let mid = cacheM.get(kd.toLowerCase());
+        if (mid === undefined) {
+          const mm = db
+            .query("SELECT id FROM mapel WHERE LOWER(kode) = LOWER(?)")
+            .get(kd) as any;
+          if (!mm) {
+            gagal.push(`${label}: kode mapel "${kd}" tidak ditemukan`);
+            batal = true;
+            break;
+          }
+          mid = mm.id;
+          cacheM.set(kd.toLowerCase(), mid);
         }
-        mapelIds.push(mm.id);
-      }
-      if (!batal)
-        for (const nk of namaKelas) {
+        let kid = cacheK.get(nk.toLowerCase());
+        if (kid === undefined) {
           const kk = db
             .query("SELECT id FROM kelas WHERE LOWER(nama) = LOWER(?)")
             .get(nk) as any;
           if (!kk) {
-            gagal.push(`Baris ${no}: kelas "${nk}" tidak ditemukan`);
+            gagal.push(`${label}: kelas "${nk}" tidak ditemukan`);
             batal = true;
             break;
           }
-          kelasIds.push(kk.id);
+          kid = kk.id;
+          cacheK.set(nk.toLowerCase(), kid);
         }
+        tugas.push([mid, kid]);
+      }
       if (batal) continue;
-      tugas = [];
-      for (const mid of mapelIds)
-        for (const kid of kelasIds) tugas.push([mid, kid]);
     }
     try {
       const ex = db
@@ -811,8 +869,6 @@ admin.post("/guru/import", async (c) => {
           "SELECT g.id, g.user_id, g.nama, g.nip, g.is_bk, g.is_ekskul, g.is_staf, g.jabatan FROM guru g JOIN users u ON u.id = g.user_id WHERE u.username = ?"
         )
         .get(username) as any;
-      const nip = col(r, "nip") || null;
-      const pw = col(r, "password");
       const fJabatan = is_staf ? jabatan : null;
       let gid: number;
       if (ex) {
@@ -896,7 +952,7 @@ admin.post("/guru/import", async (c) => {
       sukses++;
     } catch (e) {
       gagal.push(
-        `Baris ${no}: gagal menyimpan (${(e as Error)?.message ?? "galat"})`
+        `${label}: gagal menyimpan (${(e as Error)?.message ?? "galat"})`
       );
     }
   }

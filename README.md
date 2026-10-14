@@ -69,7 +69,7 @@ Kolom: `username,nama,nip,password,is_bk,is_ekskul,is_staf,jabatan,mapel,kelas`
 - `password`: kosong = tidak diubah (guru baru: default = username). Isi untuk mereset password (dianggap perubahan).
 - `is_bk`/`is_ekskul`/`is_staf`: `1`/`ya`/`yes`/`true`/`y` (tak peduli kapital) = ya.
 - `jabatan`: wajib diisi bila `is_staf` = ya (mis. `Kepala Sekolah`, `Waka Kurikulum`).
-- `mapel`: kode mapel dipisah `;` (mis. `MTK;IPA`); `kelas`: nama kelas dipisah `;` (mis. `7A;7B`). Bila kedua kolom ada di file, kombinasinya **menggantikan** penugasan mengajar guru tersebut (kosong = hapus semua penugasan). Kode/nama yang tidak dikenal membuat baris itu gagal.
+- `mapel`: kode mapel dipisah `;` (mis. `MTK;IPA`); `kelas`: nama kelas dipisah `;` (mis. `7A;7B`). Bila kedua kolom ada di file, kombinasinya **menggantikan** penugasan mengajar guru tersebut (kosong = hapus semua penugasan). Baris-baris dengan `username` sama digabung penugasannya (satu baris per mapel boleh). Kode/nama yang tidak dikenal membuat baris itu gagal.
 
 ## Struktur folder
 
