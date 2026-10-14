@@ -44,7 +44,7 @@
       <button class="btn small gold" type="button" id="btnImportCsv">📥 Import CSV</button>
       <input type="file" id="fileCsv" accept=".csv,text/csv" class="hidden">
     </div>
-    <p class="muted" style="font-size:12px; margin:.2rem 0 .8rem">Import bersifat <b>sinkronisasi</b> via <b>username</b> — belum ada → ditambah, berubah → diperbarui, sama persis → diabaikan (password = username bila dikosongkan). Kolom <b>mapel</b> (kode, pisah <b>;</b>) dan <b>kelas</b> (nama, pisah ;) bila diisi akan <b>menggantikan</b> penugasan mengajar guru tersebut. Baris-baris dengan <b>username</b> sama digabung penugasannya (satu baris per mapel boleh).</p>
+    <p class="muted" style="font-size:12px; margin:.2rem 0 .8rem">Import bersifat <b>sinkronisasi</b> via <b>username</b> — belum ada → ditambah, berubah → diperbarui, sama persis → diabaikan (password = username bila dikosongkan). Kolom <b>mapel</b> (kode, pisah <b>;</b>) dan <b>kelas</b> (nama, pisah ;) bila diisi akan <b>menggantikan</b> penugasan mengajar guru tersebut. Baris-baris dengan <b>username</b> sama digabung penugasannya (satu baris per mapel boleh). Guru <b>BK</b> (<b>is_bk</b>=1) tidak diberi penugasan mengajar — ia hanya mengisi <b>Catatan BK</b> untuk semua kelas, bukan input nilai.</p>
     <div style="overflow-x:auto">
     <table class="data" id="tabelGuru">
       <thead><tr><th>Nama</th><th>NIP</th><th>Username</th><th>Peran</th><th>Mengajar</th><th>Aksi</th></tr></thead>

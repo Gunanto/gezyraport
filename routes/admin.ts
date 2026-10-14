@@ -634,6 +634,8 @@ admin.put("/guru/:id/ajar", async (c) => {
  * - jabatan wajib bila is_staf = ya
  * - mapel: kode dipisah ";" ; kelas: nama dipisah ";" → cross product
  *   MENGGANTIKAN penugasan mengajar lama (hanya bila kolom mapel/kelas ada di file)
+ * - guru BK (is_bk=1) tidak diberi penugasan mengajar: hanya membuat catatan BK
+ *   (semua kelas via flag is_bk), bukan input nilai — kolom mapel/kelas diabaikan
  */
 
 function parseYaCSV(v: unknown): boolean {
@@ -825,6 +827,9 @@ admin.post("/guru/import", async (c) => {
       g.nos.length > 1 ? `Baris ${g.nos.join(",")}` : `Baris ${g.nos[0]}`;
     const { username, nama, nip, pw, is_bk, is_ekskul, is_staf } = g;
     const jabatan = g.jabatan;
+    // Guru BK hanya membuat catatan BK (semua kelas, via flag is_bk) — bukan input nilai,
+    // jadi tidak diberi penugasan mengajar; kolom mapel/kelas diabaikan untuknya.
+    if (is_bk) g.pasangan = [];
     // validasi mapel & kelas dulu sebelum mengubah apa pun
     let tugas: Array<[number, number]> | null = null;
     if (adaKolomTugas) {

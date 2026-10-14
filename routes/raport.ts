@@ -33,9 +33,11 @@ function bangunRaport(sw: any) {
     .query("SELECT * FROM desain_raport WHERE id = 1")
     .get() as any;
 
-  // ---- Nilai per mapel aktif ----
+  // ---- Nilai per mapel aktif (BK bukan mapel nilai: tidak dimunculkan di raport) ----
   const mapelAktif = db
-    .query("SELECT id, nama FROM mapel WHERE aktif = 1 ORDER BY urutan, id")
+    .query(
+      "SELECT id, nama FROM mapel WHERE aktif = 1 AND LOWER(kode) != 'bk' ORDER BY urutan, id"
+    )
     .all() as any[];
   const rows = mapelAktif.map((m) => {
     const n = db
