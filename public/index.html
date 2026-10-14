@@ -19,6 +19,10 @@
     <h2 id="sapaan">Selamat datang</h2>
     <p class="muted" id="periodeInfo"></p>
   </div>
+  <div id="rekapWrap" class="hidden">
+    <h3 class="rekap-judul">📊 Rekap Data</h3>
+    <div class="stat-grid" id="rekapGrid"></div>
+  </div>
   <div class="menu-grid" id="menuGrid"></div>
 </main>
 <script src="/js/common.js"></script>
@@ -44,6 +48,25 @@ const MENU_DETAIL = {
   if (!user) return;
   const nama = user.guru_nama || user.siswa_nama || user.username;
   document.getElementById("sapaan").textContent = `Selamat datang, ${nama}!`;
+  if (user.role === "admin") {
+    const r = await api("/api/admin/statistik");
+    if (r.ok) {
+      const s = r.data;
+      const fmt = (n) => Number(n || 0).toLocaleString("id-ID");
+      document.getElementById("rekapGrid").innerHTML = [
+        ["👨‍🏫", "Guru", s.guru, "/guru.html"],
+        ["🧑‍🎓", "Siswa", s.siswa, "/siswa.html"],
+        ["🏫", "Kelas", s.kelas, "/kelas.html"],
+        ["📚", "Mata Pelajaran", s.mapel, "/mapel.html"],
+      ].map(([icon, label, angka, href]) =>
+        `<a class="stat-card" href="${href}">
+          <div class="icon">${icon}</div>
+          <div class="angka">${fmt(angka)}</div>
+          <div class="label">${label}</div>
+        </a>`).join("");
+      document.getElementById("rekapWrap").classList.remove("hidden");
+    }
+  }
   const grid = document.getElementById("menuGrid");
   const items = navItems(user).filter(([, href]) => href !== "/");
   grid.innerHTML = items.map(([, href]) => {

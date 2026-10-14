@@ -59,12 +59,16 @@
       <tbody></tbody>
     </table>
     </div>
+    <div class="pagination" id="pagination"></div>
+    <div class="pagination-info" id="paginationInfo"></div>
   </div>
 </main>
 <script src="/js/common.js"></script>
 <script>
 const AGAMA = ["Islam","Kristen","Katolik","Hindu","Buddha","Konghucu"];
+const PER_HALAMAN = 25;
 let daftar = [], daftarKelas = [];
+let halaman = 1, totalHalaman = 1, totalSiswa = 0;
 
 async function muatKelas() {
   const r = await api("/api/admin/kelas");
@@ -80,9 +84,14 @@ async function muatKelas() {
 
 async function muat() {
   const fk = document.getElementById("filterKelas").value;
-  const r = await api("/api/admin/siswa" + (fk ? `?kelas_id=${fk}` : ""));
+  let url = `/api/admin/siswa?page=${halaman}&limit=${PER_HALAMAN}`;
+  if (fk) url += `&kelas_id=${fk}`;
+  const r = await api(url);
   if (!r.ok) return showMsg("msg", "Gagal memuat siswa", "error");
   daftar = r.data.siswa;
+  totalSiswa = r.data.total ?? daftar.length;
+  totalHalaman = r.data.totalPages ?? 1;
+  halaman = r.data.page ?? 1;
   document.querySelector("#tabelSiswa tbody").innerHTML = daftar.map(s =>
     `<tr>
       <td>${esc(s.nis)}</td><td>${esc(s.nama)}</td><td>${esc(s.kelas_nama || "-")}</td>
@@ -93,6 +102,39 @@ async function muat() {
         <button class="btn small red" onclick="hapus(${s.id}, '${esc(s.nama)}')">Hapus</button>
       </td>
     </tr>`).join("");
+  renderPagination();
+}
+
+function daftarNomor() {
+  const set = new Set([1, totalHalaman, halaman - 2, halaman - 1, halaman, halaman + 1, halaman + 2]);
+  return [...set].filter(n => n >= 1 && n <= totalHalaman).sort((a, b) => a - b);
+}
+
+function renderPagination() {
+  const box = document.getElementById("pagination");
+  const info = document.getElementById("paginationInfo");
+  if (totalHalaman <= 1) {
+    box.innerHTML = "";
+    info.textContent = totalSiswa ? `Total ${totalSiswa} siswa` : "";
+    return;
+  }
+  let html = `<button type="button" onclick="gotoHalaman(${halaman - 1})"${halaman <= 1 ? " disabled" : ""} title="Halaman sebelumnya">&lt;&lt;</button>`;
+  let prev = 0;
+  for (const n of daftarNomor()) {
+    if (n - prev > 1) html += `<span class="dots">…</span>`;
+    html += `<button type="button" class="${n === halaman ? "aktif" : ""}" onclick="gotoHalaman(${n})">${n}</button>`;
+    prev = n;
+  }
+  html += `<button type="button" onclick="gotoHalaman(${halaman + 1})"${halaman >= totalHalaman ? " disabled" : ""} title="Halaman berikutnya">&gt;&gt;</button>`;
+  box.innerHTML = html;
+  info.textContent = `Halaman ${halaman} dari ${totalHalaman} — total ${totalSiswa} siswa`;
+}
+
+function gotoHalaman(n) {
+  if (n < 1 || n > totalHalaman || n === halaman) return;
+  halaman = n;
+  muat();
+  document.getElementById("tabelSiswa").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function mulaiEdit(id) {
@@ -117,7 +159,7 @@ function resetForm() {
 async function hapus(id, nama) {
   if (!await confirmHapus(`Hapus siswa "${nama}" beserta akun & nilainya?`)) return;
   const r = await api(`/api/admin/siswa/${id}`, { method: "DELETE" });
-  if (r.ok) { showMsg("msg", "Siswa dihapus.", "ok"); muat(); }
+  if (r.ok) { showMsg("msg", "Siswa dihapus.", "ok"); halaman = 1; muat(); }
   else showMsg("msg", (r.data && r.data.error) || "Gagal menghapus", "error");
 }
 
@@ -125,7 +167,7 @@ async function hapus(id, nama) {
   const user = await requireLogin(["admin"]);
   if (!user) return;
   document.getElementById("btnBatal").addEventListener("click", resetForm);
-  document.getElementById("filterKelas").addEventListener("change", muat);
+  document.getElementById("filterKelas").addEventListener("change", () => { halaman = 1; muat(); });
   document.getElementById("formSiswa").addEventListener("submit", async (e) => {
     e.preventDefault(); hideMsg("msg");
     const id = document.getElementById("sid").value;
@@ -141,7 +183,7 @@ async function hapus(id, nama) {
       : await api("/api/admin/siswa", { method: "POST", body: JSON.stringify(payload) });
     if (r.ok) {
       showMsg("msg", id ? "Perubahan disimpan." : `Siswa ditambahkan. Akun: username & password = ${esc(payload.nis)}`, "ok");
-      resetForm(); muat();
+      resetForm(); halaman = 1; muat();
     } else showMsg("msg", (r.data && r.data.error) || "Gagal menyimpan", "error");
   });
   document.getElementById("btnImport").addEventListener("click", async () => {
@@ -155,7 +197,7 @@ async function hapus(id, nama) {
     if (res.ok) {
       box.innerHTML = `<div class="alert ok">Import selesai: ${data.sukses} berhasil (baru: ${data.dibuat || 0}, diperbarui: ${data.diupdate || 0}, diabaikan: ${data.diabaikan || 0}).` +
         (data.gagal.length ? `<br>Gagal:<ul>${data.gagal.map(g => `<li>${esc(g)}</li>`).join("")}</ul>` : "") + `</div>`;
-      muat();
+      halaman = 1; muat();
     } else {
       box.innerHTML = `<div class="alert error">${esc(data.error || "Import gagal")}</div>`;
     }

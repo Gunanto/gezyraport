@@ -196,3 +196,34 @@ label.checkbox input { width: auto; }
 textarea.catatan-input { width: 100%; min-height: 3.4rem; resize: vertical; }
 input.hadir-input { width: 64px; text-align: center; }
 .kop-img { max-width: 100%; max-height: 170px; }
+
+/* Card rekap statistik dashboard */
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 1.4rem; }
+.stat-card {
+  display: block;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-top: 4px solid var(--gold);
+  border-radius: 10px;
+  padding: 1rem 1.2rem;
+  text-decoration: none;
+  color: var(--text);
+}
+.stat-card:hover { border-color: var(--gold); box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+.stat-card .icon { font-size: 1.6rem; }
+.stat-card .angka { font-size: 1.9rem; font-weight: 700; color: var(--navy); margin: 0.2rem 0; }
+.stat-card .label { font-size: 0.85rem; color: var(--muted); }
+.rekap-judul { color: var(--navy); margin: 1.2rem 0 0.7rem; font-size: 1.05rem; }
+
+/* Pagination */
+.pagination { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; justify-content: center; margin-top: 1rem; }
+.pagination button {
+  min-width: 2.2rem; padding: 0.35rem 0.6rem;
+  border: 1px solid var(--border); border-radius: 6px;
+  background: var(--card); color: var(--text); cursor: pointer; font-size: 0.9rem;
+}
+.pagination button:hover:not(:disabled) { border-color: var(--gold); }
+.pagination button.aktif { background: var(--navy); color: #fff; border-color: var(--navy); font-weight: 700; }
+.pagination button:disabled { opacity: 0.45; cursor: default; }
+.pagination .dots { color: var(--muted); padding: 0 0.2rem; }
+.pagination-info { text-align: center; color: var(--muted); font-size: 0.85rem; margin-top: 0.5rem; }

@@ -42,6 +42,8 @@ Predikat dihitung otomatis dari rentang yang ditetapkan guru; bila guru belum me
 6. **Guru BK** → **Catatan BK** | **Pembina ekskul** → **Catatan Ekskul** | **Guru mapel** → **Catatan Guru** — masing-masing per kelas (form atau CSV).
 7. Menu di beranda menyesuaikan peran guru yang login (wali/BK/ekskul/pengajar).
 
+**Beranda admin** menampilkan card rekap (jumlah guru, siswa, kelas, mapel aktif) yang diambil langsung dari database — tiap card bisa diklik menuju halamannya. Tabel **Siswa** memakai pagination 25 baris per halaman agar ringan dibuka.
+
 ### Format CSV catatan (import/export)
 
 Kolom `nama` hanya referensi; pencocokan saat import memakai `nis` (harus siswa di kelas yang dipilih). Hanya kolom milik fitur itu yang diupdate:

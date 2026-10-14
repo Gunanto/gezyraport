@@ -272,7 +272,22 @@ admin.get("/siswa", (c) => {
     params.push(kelas_id);
   }
   sql += " ORDER BY k.nama, s.nama";
-  return c.json({ siswa: db.query(sql).all(...params) });
+  // Pagination: ?page=1&limit=25. Tanpa param page → semua (kompatibel pemanggil lama).
+  const page = Math.max(0, parseInt(c.req.query("page") || "0", 10) || 0);
+  if (!page) return c.json({ siswa: db.query(sql).all(...params) });
+  const limit = Math.min(
+    200,
+    Math.max(1, parseInt(c.req.query("limit") || "25", 10) || 25)
+  );
+  const total = (
+    db.query(`SELECT COUNT(*) n FROM (${sql})`).get(...params) as any
+  ).n as number;
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const p = Math.min(page, totalPages);
+  const rows = db
+    .query(sql + " LIMIT ? OFFSET ?")
+    .all(...params, limit, (p - 1) * limit);
+  return c.json({ siswa: rows, total, page: p, limit, totalPages });
 });
 
 admin.post("/siswa", async (c) => {
@@ -467,6 +482,19 @@ admin.post("/siswa/import", async (c) => {
     }
   }
   return c.json({ ok: true, sukses, dibuat, diupdate, diabaikan, gagal });
+});
+
+/* ================= STATISTIK ================= */
+
+/** Rekap jumlah data untuk dashboard admin. */
+admin.get("/statistik", (c) => {
+  const hitung = (sql: string) => (db.query(sql).get() as any).n as number;
+  return c.json({
+    guru: hitung("SELECT COUNT(*) n FROM guru"),
+    siswa: hitung("SELECT COUNT(*) n FROM siswa"),
+    kelas: hitung("SELECT COUNT(*) n FROM kelas"),
+    mapel: hitung("SELECT COUNT(*) n FROM mapel WHERE aktif=1"),
+  });
 });
 
 /* ================= GURU ================= */
