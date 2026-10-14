@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Masuk — GezyRaport</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="login-wrap">
+  <div class="login-card">
+    <h1>🎓 GezyRaport</h1>
+    <p class="sub">Aplikasi Raport Digital<br>SMP Negeri 1 Punggur</p>
+    <div id="msg" class="alert error hidden"></div>
+    <form id="formLogin">
+      <label class="field">Username
+        <input type="text" id="username" autocomplete="username" required autofocus>
+      </label>
+      <br>
+      <label class="field">Password
+        <input type="password" id="password" autocomplete="current-password" required>
+      </label>
+      <button class="btn gold" type="submit">Masuk</button>
+    </form>
+    <p class="muted" style="margin-top:1rem">Akun siswa: username &amp; password = NIS.</p>
+  </div>
+</div>
+<script src="/js/common.js"></script>
+<script>
+(async () => {
+  // sudah login? langsung ke beranda
+  const r = await api("/api/me");
+  if (r.ok) location.href = "/";
+})();
+document.getElementById("formLogin").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  hideMsg("msg");
+  const username = document.getElementById("username").value.trim();
+  const password = document.getElementById("password").value;
+  const r = await api("/api/login", {
+    method: "POST",
+    body: JSON.stringify({ username, password }),
+  });
+  if (r.ok) {
+    location.href = "/";
+  } else {
+    showMsg("msg", (r.data && r.data.error) || "Gagal masuk");
+  }
+});
+</script>
+</body>
+</html>

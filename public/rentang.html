@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rentang Nilai — GezyRaport</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">🎓 GezyRaport <small>SMPN 1 Punggur</small></div>
+  <nav id="nav"></nav>
+  <div class="spacer"></div>
+  <span class="userinfo" id="userInfo"></span>
+  <button class="btn small" id="btnLogout">Keluar</button>
+</header>
+<main class="container">
+  <div class="card">
+    <h2>📊 Rentang Ketercapaian Nilai</h2>
+    <p class="muted">Tetapkan rentang nilai untuk tiap mapel yang Anda ajar. Predikat di raport dihitung otomatis dari rentang ini. Bila belum ditetapkan, dipakai rentang bawaan (0–69 Kurang/Remedial, 70–79 Tercapai/Cukup, 80–89 Baik, 90–100 Amat Baik/Pengayaan).</p>
+    <div id="msg" class="alert hidden"></div>
+    <div class="form-grid">
+      <label class="field">Mata Pelajaran
+        <select id="mapel"><option value="">— pilih mapel —</option></select>
+      </label>
+    </div>
+    <div id="editor" class="hidden">
+      <table class="data" style="margin-top:1rem">
+        <thead><tr><th>Predikat</th><th>Nilai Minimum</th><th>Nilai Maksimum</th></tr></thead>
+        <tbody id="barisRentang"></tbody>
+      </table>
+      <div class="toolbar">
+        <button class="btn" id="btnSimpan" type="button">💾 Simpan Rentang</button>
+        <button class="btn gold" id="btnDefault" type="button">Isi Default</button>
+      </div>
+      <p class="muted" id="statusRentang"></p>
+    </div>
+  </div>
+</main>
+<script src="/js/common.js"></script>
+<script>
+const DEFAULT = [
+  { label: "Amat Baik / Pengayaan", min_nilai: 90, max_nilai: 100 },
+  { label: "Baik", min_nilai: 80, max_nilai: 89 },
+  { label: "Tercapai / Cukup", min_nilai: 70, max_nilai: 79 },
+  { label: "Kurang / Remedial", min_nilai: 0, max_nilai: 69 },
+];
+let daftarMapel = [];
+
+function renderBaris(rentang) {
+  document.getElementById("barisRentang").innerHTML = rentang.map((r, i) =>
+    `<tr>
+      <td><input data-i="${i}" data-f="label" value="${esc(r.label)}" style="width:100%"></td>
+      <td><input data-i="${i}" data-f="min_nilai" type="number" min="0" max="100" step="1" value="${esc(r.min_nilai)}" class="nilai-input"></td>
+      <td><input data-i="${i}" data-f="max_nilai" type="number" min="0" max="100" step="1" value="${esc(r.max_nilai)}" class="nilai-input"></td>
+    </tr>`).join("");
+}
+
+async function muatRentang() {
+  const mapel_id = document.getElementById("mapel").value;
+  if (!mapel_id) { document.getElementById("editor").classList.add("hidden"); return; }
+  hideMsg("msg");
+  const r = await api(`/api/guru/rentang?mapel_id=${mapel_id}`);
+  if (!r.ok) return showMsg("msg", (r.data && r.data.error) || "Gagal memuat", "error");
+  renderBaris(r.data.rentang);
+  document.getElementById("statusRentang").textContent = r.data.isDefault
+    ? "Belum ada rentang khusus — menampilkan bawaan. Simpan untuk menetapkan."
+    : "Rentang khusus sudah tersimpan untuk mapel ini.";
+  document.getElementById("editor").classList.remove("hidden");
+}
+
+(async () => {
+  const user = await requireLogin(["guru"]);
+  if (!user) return;
+  const r = await api("/api/guru/mapel");
+  daftarMapel = r.ok ? r.data.mapel : [];
+  const sel = document.getElementById("mapel");
+  sel.innerHTML = '<option value="">— pilih mapel —</option>' +
+    daftarMapel.map(m => `<option value="${m.id}">${esc(m.nama)}</option>`).join("");
+  sel.addEventListener("change", muatRentang);
+  document.getElementById("btnDefault").addEventListener("click", () => {
+    renderBaris(DEFAULT.map(d => ({ ...d })));
+  });
+  document.getElementById("btnSimpan").addEventListener("click", async () => {
+    hideMsg("msg");
+    const mapel_id = sel.value;
+    const rentang = [0, 1, 2, 3].map(i => ({
+      label: document.querySelector(`[data-i="${i}"][data-f="label"]`).value.trim(),
+      min_nilai: Number(document.querySelector(`[data-i="${i}"][data-f="min_nilai"]`).value),
+      max_nilai: Number(document.querySelector(`[data-i="${i}"][data-f="max_nilai"]`).value),
+    }));
+    const s = await api("/api/guru/rentang", {
+      method: "PUT",
+      body: JSON.stringify({ mapel_id: Number(mapel_id), rentang }),
+    });
+    if (s.ok) { showMsg("msg", "Rentang tersimpan.", "ok"); muatRentang(); }
+    else showMsg("msg", (s.data && s.data.error) || "Gagal menyimpan", "error");
+  });
+})();
+</script>
+</body>
+</html>

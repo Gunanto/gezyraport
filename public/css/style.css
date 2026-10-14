@@ -1,0 +1,180 @@
+:root {
+  --navy: #1e3a5f;
+  --navy-dark: #142a46;
+  --gold: #d4a017;
+  --gold-light: #f5e6bd;
+  --bg: #f4f6fa;
+  --card: #ffffff;
+  --text: #222;
+  --muted: #6b7280;
+  --border: #e2e8f0;
+  --green: #15803d;
+  --red: #b91c1c;
+  --blue: #1d4ed8;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+.topbar {
+  background: var(--navy);
+  color: #fff;
+  padding: 0.6rem 1.2rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.brand { font-weight: 700; font-size: 1.15rem; color: var(--gold); }
+.brand small { color: #cbd5e1; font-weight: 400; font-size: 0.8rem; }
+.topbar nav { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+.topbar nav a {
+  color: #e2e8f0;
+  text-decoration: none;
+  padding: 0.4rem 0.7rem;
+  border-radius: 6px;
+  font-size: 0.92rem;
+}
+.topbar nav a:hover, .topbar nav a.active { background: var(--navy-dark); color: var(--gold); }
+.topbar .spacer { flex: 1; }
+.userinfo { font-size: 0.88rem; color: #cbd5e1; }
+.container { max-width: 1080px; margin: 1.2rem auto; padding: 0 1rem; }
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.2rem;
+  margin-bottom: 1.2rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+.card h2, .card h3 { margin-top: 0; color: var(--navy); }
+table.data { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+table.data th, table.data td {
+  border: 1px solid var(--border);
+  padding: 0.5rem 0.6rem;
+  text-align: left;
+  vertical-align: middle;
+}
+table.data th { background: var(--navy); color: #fff; }
+table.data tr:nth-child(even) td { background: #f8fafc; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.8rem; }
+label.field { display: flex; flex-direction: column; font-size: 0.88rem; gap: 0.3rem; }
+input, select, textarea {
+  font: inherit;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+}
+input:focus, select:focus, textarea:focus {
+  outline: 2px solid var(--gold);
+  border-color: var(--gold);
+}
+.btn {
+  font: inherit;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  background: var(--navy);
+  color: #fff;
+}
+.btn:hover { background: var(--navy-dark); }
+.btn.gold { background: var(--gold); color: #1a1a1a; font-weight: 600; }
+.btn.gold:hover { background: #b8890f; }
+.btn.green { background: var(--green); }
+.btn.red { background: var(--red); }
+.btn.small { padding: 0.3rem 0.6rem; font-size: 0.85rem; }
+.btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.toolbar { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; margin: 0.8rem 0; }
+.alert { padding: 0.7rem 1rem; border-radius: 6px; margin: 0.8rem 0; font-size: 0.92rem; }
+.alert.error { background: #fee2e2; color: var(--red); border: 1px solid #fca5a5; }
+.alert.ok { background: #dcfce7; color: var(--green); border: 1px solid #86efac; }
+.alert.info { background: #dbeafe; color: var(--blue); border: 1px solid #93c5fd; }
+.menu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; }
+.menu-card {
+  display: block;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-top: 4px solid var(--gold);
+  border-radius: 10px;
+  padding: 1.2rem;
+  text-decoration: none;
+  color: var(--text);
+}
+.menu-card:hover { border-color: var(--gold); box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+.menu-card .icon { font-size: 1.8rem; }
+.menu-card h3 { margin: 0.4rem 0 0.3rem; color: var(--navy); }
+.menu-card p { margin: 0; font-size: 0.88rem; color: var(--muted); }
+.login-wrap {
+  min-height: 90vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 60%, #0f2038 100%);
+}
+.login-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 2rem;
+  width: 100%;
+  max-width: 380px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.25);
+}
+.login-card h1 { color: var(--navy); margin: 0 0 0.3rem; font-size: 1.5rem; }
+.login-card p.sub { color: var(--muted); margin-top: 0; font-size: 0.92rem; }
+.login-card .btn { width: 100%; margin-top: 0.6rem; }
+.badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.badge.aktif { background: #dcfce7; color: var(--green); }
+.badge.nonaktif { background: #fee2e2; color: var(--red); }
+.nilai-input { width: 90px; text-align: center; }
+.muted { color: var(--muted); font-size: 0.88rem; }
+.hidden { display: none !important; }
+
+/* ---- Halaman cetak ---- */
+.kertas {
+  background: #fff;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2.2rem 2.4rem;
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+}
+.kop { text-align: center; border-bottom: 3px double #000; padding-bottom: 0.8rem; margin-bottom: 1rem; }
+.kop h2 { margin: 0; font-size: 1.35rem; letter-spacing: 1px; }
+.kop p { margin: 0.15rem 0; font-size: 0.9rem; }
+.judul-raport { text-align: center; margin: 1rem 0; }
+.judul-raport h3 { margin: 0; text-decoration: underline; font-size: 1.1rem; }
+table.identitas { width: 100%; border-collapse: collapse; margin-bottom: 1rem; font-size: 0.95rem; }
+table.identitas td { padding: 0.2rem 0.4rem; vertical-align: top; }
+table.nilai-cetak { width: 100%; border-collapse: collapse; font-size: 0.95rem; margin-bottom: 1rem; }
+table.nilai-cetak th, table.nilai-cetak td { border: 1px solid #000; padding: 0.4rem 0.5rem; }
+table.nilai-cetak th { background: #eee; }
+table.nilai-cetak td.angka, table.nilai-cetak th.angka { text-align: center; }
+.catatan-box { border: 1px solid #000; padding: 0.5rem 0.7rem; margin-bottom: 0.6rem; font-size: 0.93rem; min-height: 3.2rem; }
+.catatan-box b { display: block; margin-bottom: 0.2rem; }
+.ttd { display: flex; justify-content: space-between; margin-top: 1.6rem; font-size: 0.93rem; }
+.ttd .kolom { text-align: center; width: 45%; }
+.ttd .nama { margin-top: 3.2rem; font-weight: 700; text-decoration: underline; }
+
+@media print {
+  .topbar, .no-print { display: none !important; }
+  body { background: #fff; }
+  .container { max-width: 100%; margin: 0; padding: 0; }
+  .kertas { box-shadow: none; border: none; max-width: 100%; margin: 0; padding: 0; }
+  .card { box-shadow: none; border: none; }
+  a { text-decoration: none; color: inherit; }
+}

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Raport Saya — GezyRaport</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">🎓 GezyRaport <small>SMPN 1 Punggur</small></div>
+  <nav id="nav"></nav>
+  <div class="spacer"></div>
+  <span class="userinfo" id="userInfo"></span>
+  <button class="btn small" id="btnLogout">Keluar</button>
+</header>
+<main class="container">
+  <div class="card">
+    <h2>📄 Raport Semester</h2>
+    <div id="msg" class="alert hidden"></div>
+    <div id="isiRaport"><p class="muted">Memuat...</p></div>
+    <div class="toolbar no-print">
+      <a class="btn gold" id="btnCetak" href="#">🖨 Cetak / Simpan PDF</a>
+    </div>
+  </div>
+</main>
+<script src="/js/common.js"></script>
+<script>
+function ringkas(data) {
+  const id = data.identitas;
+  const terisi = data.rows.filter(r => r.nilai !== null);
+  const rata = terisi.length
+    ? (terisi.reduce((a, b) => a + b.nilai, 0) / terisi.length).toFixed(2)
+    : "-";
+  return `
+    <table class="identitas">
+      <tr><td style="width:180px">Nama</td><td>: <b>${esc(id.nama)}</b></td></tr>
+      <tr><td>NIS</td><td>: ${esc(id.nis)}</td></tr>
+      <tr><td>Kelas</td><td>: ${esc(id.kelas || "-")}</td></tr>
+      <tr><td>Semester</td><td>: ${esc(id.semester)} — ${esc(id.tahun_ajaran)}</td></tr>
+    </table>
+    <table class="data">
+      <thead><tr><th>No</th><th>Mata Pelajaran</th><th>Nilai</th><th>Predikat</th></tr></thead>
+      <tbody>
+        ${data.rows.map((r, i) => `<tr>
+          <td>${i + 1}</td><td>${esc(r.mapel)}</td>
+          <td class="angka" style="text-align:center">${r.nilai !== null ? esc(r.nilai) : "-"}</td>
+          <td>${esc(r.predikat || "-")}</td>
+        </tr>`).join("")}
+      </tbody>
+    </table>
+    <p><b>Rata-rata:</b> ${rata} <span class="muted">(${terisi.length} dari ${data.rows.length} mapel sudah ada nilainya)</span></p>
+    <h3>Ketidakhadiran</h3>
+    <p>Sakit: <b>${data.kehadiran.sakit}</b> hari &nbsp;•&nbsp; Izin: <b>${data.kehadiran.izin}</b> hari &nbsp;•&nbsp; Tanpa keterangan: <b>${data.kehadiran.alpa}</b> hari</p>`;
+}
+(async () => {
+  const user = await requireLogin();
+  if (!user) return;
+  const params = new URLSearchParams(location.search);
+  const q = user.role === "siswa" ? "" : (params.get("siswa") ? `?siswa_id=${params.get("siswa")}` : "");
+  if (!q && user.role !== "siswa") {
+    document.getElementById("isiRaport").innerHTML =
+      '<p class="muted">Buka raport siswa lewat halaman <a href="/cetak.html">cetak</a> dengan parameter ?siswa=ID.</p>';
+    document.getElementById("btnCetak").classList.add("hidden");
+    return;
+  }
+  const r = await api("/api/raport" + q);
+  if (!r.ok) {
+    showMsg("msg", (r.data && r.data.error) || "Gagal memuat raport", "error");
+    document.getElementById("isiRaport").innerHTML = "";
+    return;
+  }
+  document.getElementById("isiRaport").innerHTML = ringkas(r.data);
+  const sid = user.role === "siswa" ? user.siswa_id : params.get("siswa");
+  document.getElementById("btnCetak").href = `/cetak.html?siswa=${sid}`;
+})();
+</script>
+</body>
+</html>

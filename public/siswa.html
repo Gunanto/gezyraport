@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Siswa — GezyRaport</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">🎓 GezyRaport <small>SMPN 1 Punggur</small></div>
+  <nav id="nav"></nav>
+  <div class="spacer"></div>
+  <span class="userinfo" id="userInfo"></span>
+  <button class="btn small" id="btnLogout">Keluar</button>
+</header>
+<main class="container">
+  <div class="card">
+    <h2>🧑‍🎓 Kelola Siswa</h2>
+    <p class="muted">Setiap siswa yang ditambahkan otomatis mendapat akun: username &amp; password = NIS.</p>
+    <div id="msg" class="alert hidden"></div>
+    <form id="formSiswa">
+      <input type="hidden" id="sid">
+      <div class="form-grid">
+        <label class="field">NIS <input id="nis" required></label>
+        <label class="field">Nama Lengkap <input id="nama" required></label>
+        <label class="field">Kelas <select id="kelas"><option value="">— pilih —</option></select></label>
+        <label class="field">Agama
+          <select id="agama"><option value="">— pilih —</option></select>
+        </label>
+        <label class="field">Jenis Kelamin
+          <select id="jk"><option value="">— pilih —</option><option value="L">Laki-laki</option><option value="P">Perempuan</option></select>
+        </label>
+      </div>
+      <div class="toolbar">
+        <button class="btn" type="submit" id="btnSimpan">Tambah</button>
+        <button class="btn red hidden" type="button" id="btnBatal">Batal</button>
+      </div>
+    </form>
+  </div>
+  <div class="card">
+    <h3>Import / Export CSV</h3>
+    <p class="muted">Format kolom: <b>nis,nama,kelas,agama,jenis_kelamin</b> (jenis_kelamin: L/P). Nama kelas harus sama persis dengan data kelas.</p>
+    <div class="toolbar">
+      <a class="btn green" href="/api/admin/siswa/export">⬇ Unduh / Export CSV</a>
+      <input type="file" id="fileCsv" accept=".csv">
+      <button class="btn gold" id="btnImport" type="button">⬆ Import CSV</button>
+    </div>
+    <div id="hasilImport"></div>
+  </div>
+  <div class="card">
+    <h3>Daftar Siswa</h3>
+    <div class="toolbar">
+      <label>Filter kelas: <select id="filterKelas"><option value="">Semua kelas</option></select></label>
+    </div>
+    <div style="overflow-x:auto">
+    <table class="data" id="tabelSiswa">
+      <thead><tr><th>NIS</th><th>Nama</th><th>Kelas</th><th>Agama</th><th>L/P</th><th>Akun</th><th>Aksi</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    </div>
+  </div>
+</main>
+<script src="/js/common.js"></script>
+<script>
+const AGAMA = ["Islam","Kristen","Katolik","Hindu","Buddha","Konghucu"];
+let daftar = [], daftarKelas = [];
+
+async function muatKelas() {
+  const r = await api("/api/admin/kelas");
+  daftarKelas = r.ok ? r.data.kelas : [];
+  const opts = '<option value="">— pilih —</option>' +
+    daftarKelas.map(k => `<option value="${k.id}">${esc(k.nama)}</option>`).join("");
+  document.getElementById("kelas").innerHTML = opts;
+  document.getElementById("filterKelas").innerHTML = '<option value="">Semua kelas</option>' +
+    daftarKelas.map(k => `<option value="${k.id}">${esc(k.nama)}</option>`).join("");
+  document.getElementById("agama").innerHTML = '<option value="">— pilih —</option>' +
+    AGAMA.map(a => `<option>${a}</option>`).join("");
+}
+
+async function muat() {
+  const fk = document.getElementById("filterKelas").value;
+  const r = await api("/api/admin/siswa" + (fk ? `?kelas_id=${fk}` : ""));
+  if (!r.ok) return showMsg("msg", "Gagal memuat siswa", "error");
+  daftar = r.data.siswa;
+  document.querySelector("#tabelSiswa tbody").innerHTML = daftar.map(s =>
+    `<tr>
+      <td>${esc(s.nis)}</td><td>${esc(s.nama)}</td><td>${esc(s.kelas_nama || "-")}</td>
+      <td>${esc(s.agama || "-")}</td><td>${esc(s.jenis_kelamin || "-")}</td>
+      <td>${s.username ? '<span class="badge aktif">ada</span>' : '<span class="badge nonaktif">tidak</span>'}</td>
+      <td>
+        <button class="btn small" onclick="mulaiEdit(${s.id})">Ubah</button>
+        <button class="btn small red" onclick="hapus(${s.id}, '${esc(s.nama)}')">Hapus</button>
+      </td>
+    </tr>`).join("");
+}
+
+function mulaiEdit(id) {
+  const s = daftar.find(x => x.id === id);
+  if (!s) return;
+  document.getElementById("sid").value = s.id;
+  document.getElementById("nis").value = s.nis;
+  document.getElementById("nama").value = s.nama;
+  document.getElementById("kelas").value = s.kelas_id || "";
+  document.getElementById("agama").value = s.agama || "";
+  document.getElementById("jk").value = s.jenis_kelamin || "";
+  document.getElementById("btnSimpan").textContent = "Simpan Perubahan";
+  document.getElementById("btnBatal").classList.remove("hidden");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+function resetForm() {
+  document.getElementById("formSiswa").reset();
+  document.getElementById("sid").value = "";
+  document.getElementById("btnSimpan").textContent = "Tambah";
+  document.getElementById("btnBatal").classList.add("hidden");
+}
+async function hapus(id, nama) {
+  if (!await confirmHapus(`Hapus siswa "${nama}" beserta akun & nilainya?`)) return;
+  const r = await api(`/api/admin/siswa/${id}`, { method: "DELETE" });
+  if (r.ok) { showMsg("msg", "Siswa dihapus.", "ok"); muat(); }
+  else showMsg("msg", (r.data && r.data.error) || "Gagal menghapus", "error");
+}
+
+(async () => {
+  const user = await requireLogin(["admin"]);
+  if (!user) return;
+  document.getElementById("btnBatal").addEventListener("click", resetForm);
+  document.getElementById("filterKelas").addEventListener("change", muat);
+  document.getElementById("formSiswa").addEventListener("submit", async (e) => {
+    e.preventDefault(); hideMsg("msg");
+    const id = document.getElementById("sid").value;
+    const payload = {
+      nis: document.getElementById("nis").value.trim(),
+      nama: document.getElementById("nama").value.trim(),
+      kelas_id: document.getElementById("kelas").value || null,
+      agama: document.getElementById("agama").value || null,
+      jenis_kelamin: document.getElementById("jk").value || null,
+    };
+    const r = id
+      ? await api(`/api/admin/siswa/${id}`, { method: "PUT", body: JSON.stringify(payload) })
+      : await api("/api/admin/siswa", { method: "POST", body: JSON.stringify(payload) });
+    if (r.ok) {
+      showMsg("msg", id ? "Perubahan disimpan." : `Siswa ditambahkan. Akun: username & password = ${esc(payload.nis)}`, "ok");
+      resetForm(); muat();
+    } else showMsg("msg", (r.data && r.data.error) || "Gagal menyimpan", "error");
+  });
+  document.getElementById("btnImport").addEventListener("click", async () => {
+    const f = document.getElementById("fileCsv").files[0];
+    if (!f) return showMsg("msg", "Pilih file CSV dulu.", "error");
+    const fd = new FormData();
+    fd.append("file", f);
+    const res = await fetch("/api/admin/siswa/import", { method: "POST", body: fd });
+    const data = await res.json();
+    const box = document.getElementById("hasilImport");
+    if (res.ok) {
+      box.innerHTML = `<div class="alert ok">Import selesai: ${data.sukses} berhasil.` +
+        (data.gagal.length ? `<br>Gagal:<ul>${data.gagal.map(g => `<li>${esc(g)}</li>`).join("")}</ul>` : "") + `</div>`;
+      muat();
+    } else {
+      box.innerHTML = `<div class="alert error">${esc(data.error || "Import gagal")}</div>`;
+    }
+  });
+  await muatKelas();
+  await muat();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mata Pelajaran — GezyRaport</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">🎓 GezyRaport <small>SMPN 1 Punggur</small></div>
+  <nav id="nav"></nav>
+  <div class="spacer"></div>
+  <span class="userinfo" id="userInfo"></span>
+  <button class="btn small" id="btnLogout">Keluar</button>
+</header>
+<main class="container">
+  <div class="card">
+    <h2>📚 Mata Pelajaran</h2>
+    <p class="muted">Urutan menentukan tampilan di raport. Nonaktifkan mapel yang tidak dipakai agar tidak muncul di raport.</p>
+    <div id="msg" class="alert hidden"></div>
+    <form id="formMapel">
+      <input type="hidden" id="mid">
+      <div class="form-grid">
+        <label class="field">Nama Mapel <input id="nama" required></label>
+        <label class="field">Kode (unik) <input id="kode" required style="text-transform:uppercase"></label>
+        <label class="field">Urutan <input id="urutan" type="number" min="1"></label>
+        <label class="field">Status
+          <select id="aktif"><option value="1">Aktif</option><option value="0">Nonaktif</option></select>
+        </label>
+      </div>
+      <div class="toolbar">
+        <button class="btn" type="submit" id="btnSimpan">Tambah</button>
+        <button class="btn red hidden" type="button" id="btnBatal">Batal</button>
+      </div>
+    </form>
+  </div>
+  <div class="card">
+    <h3>Daftar Mapel</h3>
+    <div style="overflow-x:auto">
+    <table class="data" id="tabelMapel">
+      <thead><tr><th>Urutan</th><th>Kode</th><th>Nama</th><th>Status</th><th>Aksi</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    </div>
+  </div>
+</main>
+<script src="/js/common.js"></script>
+<script>
+let daftar = [];
+async function muat() {
+  const r = await api("/api/admin/mapel");
+  if (!r.ok) return showMsg("msg", "Gagal memuat mapel", "error");
+  daftar = r.data.mapel;
+  document.querySelector("#tabelMapel tbody").innerHTML = daftar.map(m =>
+    `<tr>
+      <td>${esc(m.urutan)}</td><td>${esc(m.kode)}</td><td>${esc(m.nama)}</td>
+      <td><span class="badge ${m.aktif ? "aktif" : "nonaktif"}">${m.aktif ? "Aktif" : "Nonaktif"}</span></td>
+      <td>
+        <button class="btn small" onclick="mulaiEdit(${m.id})">Ubah</button>
+        <button class="btn small red" onclick="hapus(${m.id}, '${esc(m.nama)}')">Hapus</button>
+      </td>
+    </tr>`).join("");
+}
+function mulaiEdit(id) {
+  const m = daftar.find(x => x.id === id);
+  if (!m) return;
+  document.getElementById("mid").value = m.id;
+  document.getElementById("nama").value = m.nama;
+  document.getElementById("kode").value = m.kode;
+  document.getElementById("urutan").value = m.urutan;
+  document.getElementById("aktif").value = m.aktif ? "1" : "0";
+  document.getElementById("btnSimpan").textContent = "Simpan Perubahan";
+  document.getElementById("btnBatal").classList.remove("hidden");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+function resetForm() {
+  document.getElementById("formMapel").reset();
+  document.getElementById("mid").value = "";
+  document.getElementById("btnSimpan").textContent = "Tambah";
+  document.getElementById("btnBatal").classList.add("hidden");
+}
+async function hapus(id, nama) {
+  if (!await confirmHapus(`Hapus mapel "${nama}"?`)) return;
+  const r = await api(`/api/admin/mapel/${id}`, { method: "DELETE" });
+  if (r.ok) { showMsg("msg", "Mapel dihapus.", "ok"); muat(); }
+  else showMsg("msg", (r.data && r.data.error) || "Gagal menghapus", "error");
+}
+(async () => {
+  const user = await requireLogin(["admin"]);
+  if (!user) return;
+  document.getElementById("btnBatal").addEventListener("click", resetForm);
+  document.getElementById("formMapel").addEventListener("submit", async (e) => {
+    e.preventDefault(); hideMsg("msg");
+    const id = document.getElementById("mid").value;
+    const payload = {
+      nama: document.getElementById("nama").value.trim(),
+      kode: document.getElementById("kode").value.trim(),
+      urutan: Number(document.getElementById("urutan").value) || null,
+      aktif: Number(document.getElementById("aktif").value),
+    };
+    const r = id
+      ? await api(`/api/admin/mapel/${id}`, { method: "PUT", body: JSON.stringify(payload) })
+      : await api("/api/admin/mapel", { method: "POST", body: JSON.stringify(payload) });
+    if (r.ok) { showMsg("msg", "Tersimpan.", "ok"); resetForm(); muat(); }
+    else showMsg("msg", (r.data && r.data.error) || "Gagal menyimpan", "error");
+  });
+  await muat();
+})();
+</script>
+</body>
+</html>

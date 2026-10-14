@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kelas — GezyRaport</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">🎓 GezyRaport <small>SMPN 1 Punggur</small></div>
+  <nav id="nav"></nav>
+  <div class="spacer"></div>
+  <span class="userinfo" id="userInfo"></span>
+  <button class="btn small" id="btnLogout">Keluar</button>
+</header>
+<main class="container">
+  <div class="card">
+    <h2>🏫 Kelola Kelas</h2>
+    <div id="msg" class="alert hidden"></div>
+    <form id="formKelas">
+      <input type="hidden" id="kid">
+      <div class="form-grid">
+        <label class="field">Nama Kelas <input id="nama" required placeholder="cth: 7A"></label>
+        <label class="field">Tingkat
+          <select id="tingkat"><option value="7">7</option><option value="8">8</option><option value="9">9</option></select>
+        </label>
+        <label class="field">Wali Kelas <select id="wali"><option value="">— belum ditentukan —</option></select></label>
+        <label class="field">Tahun Ajaran <input id="ta" placeholder="2026/2027"></label>
+        <label class="field">Semester <input id="semester" placeholder="Ganjil"></label>
+      </div>
+      <div class="toolbar">
+        <button class="btn" type="submit" id="btnSimpan">Tambah</button>
+        <button class="btn red hidden" type="button" id="btnBatal">Batal</button>
+      </div>
+    </form>
+  </div>
+  <div class="card">
+    <h3>Daftar Kelas</h3>
+    <div style="overflow-x:auto">
+    <table class="data" id="tabelKelas">
+      <thead><tr><th>Kelas</th><th>Tingkat</th><th>Wali Kelas</th><th>TA / Semester</th><th>Siswa</th><th>Aksi</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    </div>
+  </div>
+</main>
+<script src="/js/common.js"></script>
+<script>
+let daftar = [], daftarGuru = [];
+async function muatGuru() {
+  const r = await api("/api/admin/guru");
+  daftarGuru = r.ok ? r.data.guru : [];
+  const sel = document.getElementById("wali");
+  sel.innerHTML = '<option value="">— belum ditentukan —</option>' +
+    daftarGuru.map(g => `<option value="${g.id}">${esc(g.nama)}${g.nip ? " (" + esc(g.nip) + ")" : ""}</option>`).join("");
+}
+async function muat() {
+  const r = await api("/api/admin/kelas");
+  if (!r.ok) return showMsg("msg", "Gagal memuat kelas", "error");
+  daftar = r.data.kelas;
+  document.querySelector("#tabelKelas tbody").innerHTML = daftar.map(k =>
+    `<tr>
+      <td><b>${esc(k.nama)}</b></td><td>${esc(k.tingkat || "-")}</td>
+      <td>${esc(k.wali_nama || "-")}</td>
+      <td>${esc(k.tahun_ajaran || "-")} / ${esc(k.semester || "-")}</td>
+      <td>${k.jml_siswa}</td>
+      <td>
+        <button class="btn small" onclick="mulaiEdit(${k.id})">Ubah</button>
+        <button class="btn small red" onclick="hapus(${k.id}, '${esc(k.nama)}')">Hapus</button>
+      </td>
+    </tr>`).join("");
+}
+function mulaiEdit(id) {
+  const k = daftar.find(x => x.id === id);
+  if (!k) return;
+  document.getElementById("kid").value = k.id;
+  document.getElementById("nama").value = k.nama;
+  document.getElementById("tingkat").value = k.tingkat || "7";
+  document.getElementById("wali").value = k.wali_guru_id || "";
+  document.getElementById("ta").value = k.tahun_ajaran || "";
+  document.getElementById("semester").value = k.semester || "";
+  document.getElementById("btnSimpan").textContent = "Simpan Perubahan";
+  document.getElementById("btnBatal").classList.remove("hidden");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+function resetForm() {
+  document.getElementById("formKelas").reset();
+  document.getElementById("kid").value = "";
+  document.getElementById("btnSimpan").textContent = "Tambah";
+  document.getElementById("btnBatal").classList.add("hidden");
+}
+async function hapus(id, nama) {
+  if (!await confirmHapus(`Hapus kelas "${nama}"?`)) return;
+  const r = await api(`/api/admin/kelas/${id}`, { method: "DELETE" });
+  if (r.ok) { showMsg("msg", "Kelas dihapus.", "ok"); muat(); }
+  else showMsg("msg", (r.data && r.data.error) || "Gagal menghapus", "error");
+}
+(async () => {
+  const user = await requireLogin(["admin"]);
+  if (!user) return;
+  document.getElementById("btnBatal").addEventListener("click", resetForm);
+  document.getElementById("formKelas").addEventListener("submit", async (e) => {
+    e.preventDefault(); hideMsg("msg");
+    const id = document.getElementById("kid").value;
+    const payload = {
+      nama: document.getElementById("nama").value.trim(),
+      tingkat: document.getElementById("tingkat").value,
+      wali_guru_id: document.getElementById("wali").value || null,
+      tahun_ajaran: document.getElementById("ta").value.trim() || null,
+      semester: document.getElementById("semester").value.trim() || null,
+    };
+    const r = id
+      ? await api(`/api/admin/kelas/${id}`, { method: "PUT", body: JSON.stringify(payload) })
+      : await api("/api/admin/kelas", { method: "POST", body: JSON.stringify(payload) });
+    if (r.ok) { showMsg("msg", "Tersimpan.", "ok"); resetForm(); muat(); }
+    else showMsg("msg", (r.data && r.data.error) || "Gagal menyimpan", "error");
+  });
+  await muatGuru();
+  await muat();
+})();
+</script>
+</body>
+</html>

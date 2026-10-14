@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Beranda — GezyRaport</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">🎓 GezyRaport <small>SMPN 1 Punggur</small></div>
+  <nav id="nav"></nav>
+  <div class="spacer"></div>
+  <span class="userinfo" id="userInfo"></span>
+  <button class="btn small" id="btnLogout">Keluar</button>
+</header>
+<main class="container">
+  <div class="card">
+    <h2 id="sapaan">Selamat datang</h2>
+    <p class="muted" id="periodeInfo"></p>
+  </div>
+  <div class="menu-grid" id="menuGrid"></div>
+</main>
+<script src="/js/common.js"></script>
+<script>
+const MENU_DETAIL = {
+  "/users.html": ["👥", "Pengguna", "Kelola akun admin, guru, dan siswa/ortu."],
+  "/guru.html": ["👨‍🏫", "Guru", "Data guru, NIP, dan penugasan mengajar."],
+  "/kelas.html": ["🏫", "Kelas", "Data kelas, wali kelas, tahun ajaran."],
+  "/siswa.html": ["🧑‍🎓", "Siswa", "Data siswa + akun otomatis, import/export CSV."],
+  "/mapel.html": ["📚", "Mata Pelajaran", "12 mapel, urutan tampil, aktif/nonaktif."],
+  "/rentang.html": ["📊", "Rentang Nilai", "Tetapkan rentang predikat tiap mapel."],
+  "/nilai.html": ["✏️", "Input Nilai", "Input nilai per kelas atau import CSV."],
+  "/raport.html": ["📄", "Raport Saya", "Lihat dan cetak raport semester aktif."],
+};
+(async () => {
+  const user = await requireLogin();
+  if (!user) return;
+  const nama = user.guru_nama || user.siswa_nama || user.username;
+  document.getElementById("sapaan").textContent = `Selamat datang, ${nama}!`;
+  const grid = document.getElementById("menuGrid");
+  const items = (NAVS[user.role] || []).filter(([, href]) => href !== "/");
+  grid.innerHTML = items.map(([, href]) => {
+    const [icon, judul, desc] = MENU_DETAIL[href] || ["📁", href, ""];
+    return `<a class="menu-card" href="${href}">
+      <div class="icon">${icon}</div><h3>${esc(judul)}</h3><p>${esc(desc)}</p>
+    </a>`;
+  }).join("");
+})();
+</script>
+</body>
+</html>

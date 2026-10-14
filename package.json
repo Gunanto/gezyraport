@@ -1,0 +1,1 @@
+{"dependencies":{"hono":"^4.7.0"},"description":"Aplikasi raport digital SMP Negeri 1 Punggur (MVP Fase 1)","name":"gezyraport","private":true,"scripts":{"seed":"bun seed.ts","start":"bun server.ts"},"version":"1.0.0"}

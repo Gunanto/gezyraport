@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Input Nilai — GezyRaport</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">🎓 GezyRaport <small>SMPN 1 Punggur</small></div>
+  <nav id="nav"></nav>
+  <div class="spacer"></div>
+  <span class="userinfo" id="userInfo"></span>
+  <button class="btn small" id="btnLogout">Keluar</button>
+</header>
+<main class="container">
+  <div class="card">
+    <h2>✏️ Input Nilai</h2>
+    <p class="muted" id="periodeInfo"></p>
+    <div id="msg" class="alert hidden"></div>
+    <div class="form-grid">
+      <label class="field">Kelas <select id="kelas"><option value="">— pilih —</option></select></label>
+      <label class="field">Mata Pelajaran <select id="mapel"><option value="">— pilih kelas dulu —</option></select></label>
+    </div>
+    <div class="toolbar">
+      <button class="btn" id="btnMuat" type="button">Muat Daftar Siswa</button>
+      <a class="btn green hidden" id="linkTemplate" href="#">⬇ Unduh Template CSV</a>
+      <input type="file" id="fileCsv" accept=".csv" class="hidden">
+      <button class="btn gold hidden" id="btnImport" type="button">⬆ Import CSV</button>
+    </div>
+  </div>
+  <div class="card hidden" id="panelNilai">
+    <h3>Daftar Nilai <span class="muted" id="infoKelas"></span></h3>
+    <div style="overflow-x:auto">
+    <table class="data">
+      <thead><tr><th>No</th><th>NIS</th><th>Nama</th><th>Nilai (0–100)</th></tr></thead>
+      <tbody id="barisNilai"></tbody>
+    </table>
+    </div>
+    <div class="toolbar">
+      <button class="btn gold" id="btnSimpan" type="button">💾 Simpan Nilai</button>
+    </div>
+    <div id="hasilSimpan"></div>
+  </div>
+</main>
+<script src="/js/common.js"></script>
+<script>
+let ajar = [];
+
+async function init() {
+  const r = await api("/api/guru/ajar");
+  ajar = r.ok ? r.data.ajar : [];
+  const kelasUnik = [];
+  const lihat = new Set();
+  for (const a of ajar) {
+    if (!lihat.has(a.kelas_id)) { lihat.add(a.kelas_id); kelasUnik.push(a); }
+  }
+  document.getElementById("kelas").innerHTML = '<option value="">— pilih —</option>' +
+    kelasUnik.map(a => `<option value="${a.kelas_id}">${esc(a.kelas_nama)}</option>`).join("");
+}
+
+function isiMapel() {
+  const kelas_id = Number(document.getElementById("kelas").value);
+  const daftar = ajar.filter(a => a.kelas_id === kelas_id);
+  document.getElementById("mapel").innerHTML = '<option value="">— pilih —</option>' +
+    daftar.map(a => `<option value="${a.mapel_id}">${esc(a.mapel_nama)}</option>`).join("");
+}
+
+async function muatNilai() {
+  hideMsg("msg");
+  document.getElementById("hasilSimpan").innerHTML = "";
+  const kelas_id = document.getElementById("kelas").value;
+  const mapel_id = document.getElementById("mapel").value;
+  if (!kelas_id || !mapel_id) return showMsg("msg", "Pilih kelas dan mapel dulu.", "error");
+  const r = await api(`/api/guru/nilai?kelas_id=${kelas_id}&mapel_id=${mapel_id}`);
+  if (!r.ok) return showMsg("msg", (r.data && r.data.error) || "Gagal memuat", "error");
+  const p = r.data.periode;
+  document.getElementById("periodeInfo").textContent =
+    `Semester ${p.semester} — Tahun Ajaran ${p.tahun_ajaran}`;
+  document.getElementById("infoKelas").textContent =
+    `(${document.getElementById("kelas").selectedOptions[0].text} — ${document.getElementById("mapel").selectedOptions[0].text})`;
+  document.getElementById("barisNilai").innerHTML = r.data.siswa.map((s, i) =>
+    `<tr>
+      <td>${i + 1}</td><td>${esc(s.nis)}</td><td>${esc(s.nama)}</td>
+      <td><input type="number" min="0" max="100" step="0.01" class="nilai-input"
+        data-siswa="${s.siswa_id}" value="${s.nilai_angka ?? ""}" placeholder="—"></td>
+    </tr>`).join("");
+  const tpl = document.getElementById("linkTemplate");
+  tpl.href = `/api/guru/nilai/template?kelas_id=${kelas_id}&mapel_id=${mapel_id}`;
+  tpl.classList.remove("hidden");
+  document.getElementById("fileCsv").classList.remove("hidden");
+  document.getElementById("btnImport").classList.remove("hidden");
+  document.getElementById("panelNilai").classList.remove("hidden");
+}
+
+(async () => {
+  const user = await requireLogin(["guru"]);
+  if (!user) return;
+  await init();
+  document.getElementById("kelas").addEventListener("change", () => {
+    isiMapel();
+    document.getElementById("panelNilai").classList.add("hidden");
+  });
+  document.getElementById("btnMuat").addEventListener("click", muatNilai);
+  document.getElementById("btnSimpan").addEventListener("click", async () => {
+    const kelas_id = Number(document.getElementById("kelas").value);
+    const mapel_id = Number(document.getElementById("mapel").value);
+    const nilai = [...document.querySelectorAll("[data-siswa]")].map(inp => ({
+      siswa_id: Number(inp.dataset.siswa),
+      nilai_angka: inp.value === "" ? null : Number(inp.value),
+    }));
+    const r = await api("/api/guru/nilai", {
+      method: "PUT",
+      body: JSON.stringify({ kelas_id, mapel_id, nilai }),
+    });
+    const box = document.getElementById("hasilSimpan");
+    if (r.ok) {
+      box.innerHTML = `<div class="alert ok">Tersimpan: ${r.data.tersimpan} nilai.` +
+        (r.data.gagal.length ? `<br>Perlu perhatian:<ul>${r.data.gagal.map(g => `<li>${esc(g)}</li>`).join("")}</ul>` : "") + `</div>`;
+      muatNilai();
+    } else {
+      box.innerHTML = `<div class="alert error">${esc((r.data && r.data.error) || "Gagal menyimpan")}</div>`;
+    }
+  });
+  document.getElementById("btnImport").addEventListener("click", async () => {
+    const f = document.getElementById("fileCsv").files[0];
+    if (!f) return showMsg("msg", "Pilih file CSV dulu.", "error");
+    const kelas_id = document.getElementById("kelas").value;
+    const mapel_id = document.getElementById("mapel").value;
+    const fd = new FormData();
+    fd.append("file", f);
+    const res = await fetch(`/api/guru/nilai/import?kelas_id=${kelas_id}&mapel_id=${mapel_id}`, {
+      method: "POST", body: fd,
+    });
+    const data = await res.json();
+    const box = document.getElementById("hasilSimpan");
+    if (res.ok) {
+      box.innerHTML = `<div class="alert ok">Import selesai: ${data.tersimpan} nilai tersimpan.` +
+        (data.gagal.length ? `<br>Gagal:<ul>${data.gagal.map(g => `<li>${esc(g)}</li>`).join("")}</ul>` : "") + `</div>`;
+      muatNilai();
+    } else {
+      box.innerHTML = `<div class="alert error">${esc(data.error || "Import gagal")}</div>`;
+    }
+  });
+})();
+</script>
+</body>
+</html>

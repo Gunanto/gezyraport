@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guru — GezyRaport</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">🎓 GezyRaport <small>SMPN 1 Punggur</small></div>
+  <nav id="nav"></nav>
+  <div class="spacer"></div>
+  <span class="userinfo" id="userInfo"></span>
+  <button class="btn small" id="btnLogout">Keluar</button>
+</header>
+<main class="container">
+  <div class="card">
+    <h2>👨‍🏫 Kelola Guru</h2>
+    <div id="msg" class="alert hidden"></div>
+    <form id="formGuru">
+      <input type="hidden" id="gid">
+      <div class="form-grid">
+        <label class="field">Username <input id="username" required></label>
+        <label class="field">Password <span class="muted">(wajib saat tambah baru)</span> <input id="password" type="password"></label>
+        <label class="field">Nama Lengkap <input id="nama" required></label>
+        <label class="field">NIP <input id="nip"></label>
+      </div>
+      <div class="toolbar">
+        <button class="btn" type="submit" id="btnSimpan">Tambah</button>
+        <button class="btn red hidden" type="button" id="btnBatal">Batal</button>
+      </div>
+    </form>
+  </div>
+  <div class="card">
+    <h3>Daftar Guru</h3>
+    <div style="overflow-x:auto">
+    <table class="data" id="tabelGuru">
+      <thead><tr><th>Nama</th><th>NIP</th><th>Username</th><th>Mengajar</th><th>Aksi</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    </div>
+  </div>
+  <div class="card" id="panelAjar">
+    <h3>📋 Penugasan Mengajar: <span id="ajarNama"></span></h3>
+    <div id="daftarAjar"></div>
+    <div class="form-grid" style="margin-top:.8rem">
+      <label class="field">Mapel <select id="ajarMapel"></select></label>
+      <label class="field">Kelas <select id="ajarKelas"></select></label>
+    </div>
+    <div class="toolbar">
+      <button class="btn small" type="button" id="btnTambahAjar">+ Tambah</button>
+      <button class="btn gold small" type="button" id="btnSimpanAjar">💾 Simpan Penugasan</button>
+      <button class="btn small red" type="button" id="btnTutupAjar">Tutup</button>
+    </div>
+    <div id="msgAjar" class="alert hidden"></div>
+  </div>
+</main>
+<script src="/js/common.js"></script>
+<script>
+let daftar = [], daftarMapel = [], daftarKelas = [];
+let ajarGuruId = null, ajarList = [];
+
+async function muat() {
+  const r = await api("/api/admin/guru");
+  if (!r.ok) return showMsg("msg", "Gagal memuat guru", "error");
+  daftar = r.data.guru;
+  document.querySelector("#tabelGuru tbody").innerHTML = daftar.map(g =>
+    `<tr>
+      <td>${esc(g.nama)}</td><td>${esc(g.nip || "-")}</td><td>${esc(g.username || "-")}</td>
+      <td>${g.jml_ajar} pasangan</td>
+      <td>
+        <button class="btn small" onclick="mulaiEdit(${g.id})">Ubah</button>
+        <button class="btn small gold" onclick="bukaAjar(${g.id})">Mengajar</button>
+        <button class="btn small red" onclick="hapus(${g.id}, '${esc(g.nama)}')">Hapus</button>
+      </td>
+    </tr>`).join("");
+}
+async function muatRef() {
+  const [rm, rk] = await Promise.all([api("/api/admin/mapel"), api("/api/admin/kelas")]);
+  daftarMapel = rm.ok ? rm.data.mapel.filter(m => m.aktif) : [];
+  daftarKelas = rk.ok ? rk.data.kelas : [];
+  document.getElementById("ajarMapel").innerHTML =
+    daftarMapel.map(m => `<option value="${m.id}">${esc(m.nama)}</option>`).join("");
+  document.getElementById("ajarKelas").innerHTML =
+    daftarKelas.map(k => `<option value="${k.id}">${esc(k.nama)}</option>`).join("");
+}
+function mulaiEdit(id) {
+  const g = daftar.find(x => x.id === id);
+  if (!g) return;
+  document.getElementById("gid").value = g.id;
+  document.getElementById("username").value = g.username || "";
+  document.getElementById("username").disabled = true;
+  document.getElementById("password").value = "";
+  document.getElementById("nama").value = g.nama;
+  document.getElementById("nip").value = g.nip || "";
+  document.getElementById("btnSimpan").textContent = "Simpan Perubahan";
+  document.getElementById("btnBatal").classList.remove("hidden");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+function resetForm() {
+  document.getElementById("formGuru").reset();
+  document.getElementById("gid").value = "";
+  document.getElementById("username").disabled = false;
+  document.getElementById("btnSimpan").textContent = "Tambah";
+  document.getElementById("btnBatal").classList.add("hidden");
+}
+async function hapus(id, nama) {
+  if (!await confirmHapus(`Hapus guru "${nama}" beserta akunnya?`)) return;
+  const r = await api(`/api/admin/guru/${id}`, { method: "DELETE" });
+  if (r.ok) { showMsg("msg", "Guru dihapus.", "ok"); muat(); }
+  else showMsg("msg", (r.data && r.data.error) || "Gagal menghapus", "error");
+}
+/* --- panel penugasan --- */
+async function bukaAjar(id) {
+  const g = daftar.find(x => x.id === id);
+  ajarGuruId = id;
+  document.getElementById("ajarNama").textContent = g ? g.nama : "";
+  const r = await api(`/api/admin/guru/${id}/ajar`);
+  ajarList = r.ok ? r.data.ajar : [];
+  renderAjar();
+  document.getElementById("panelAjar").scrollIntoView({ behavior: "smooth" });
+}
+function renderAjar() {
+  const box = document.getElementById("daftarAjar");
+  if (!ajarList.length) { box.innerHTML = '<p class="muted">Belum ada penugasan.</p>'; return; }
+  box.innerHTML = '<table class="data"><thead><tr><th>Mapel</th><th>Kelas</th><th>Aksi</th></tr></thead><tbody>' +
+    ajarList.map((a, i) =>
+      `<tr><td>${esc(a.mapel_nama)}</td><td>${esc(a.kelas_nama)}</td>
+       <td><button class="btn small red" onclick="hapusAjar(${i})">Hapus</button></td></tr>`).join("") +
+    "</tbody></table>";
+}
+function hapusAjar(i) { ajarList.splice(i, 1); renderAjar(); }
+
+(async () => {
+  const user = await requireLogin(["admin"]);
+  if (!user) return;
+  document.getElementById("panelAjar").style.display = "none";
+  document.getElementById("btnBatal").addEventListener("click", resetForm);
+  document.getElementById("formGuru").addEventListener("submit", async (e) => {
+    e.preventDefault(); hideMsg("msg");
+    const id = document.getElementById("gid").value;
+    const payload = {
+      nama: document.getElementById("nama").value.trim(),
+      nip: document.getElementById("nip").value.trim() || null,
+    };
+    let r;
+    if (id) {
+      r = await api(`/api/admin/guru/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+    } else {
+      r = await api("/api/admin/guru", { method: "POST", body: JSON.stringify({
+        ...payload,
+        username: document.getElementById("username").value.trim(),
+        password: document.getElementById("password").value,
+      })});
+    }
+    if (r.ok) { showMsg("msg", "Tersimpan.", "ok"); resetForm(); muat(); }
+    else showMsg("msg", (r.data && r.data.error) || "Gagal menyimpan", "error");
+  });
+  document.getElementById("btnTambahAjar").addEventListener("click", () => {
+    const mapel_id = Number(document.getElementById("ajarMapel").value);
+    const kelas_id = Number(document.getElementById("ajarKelas").value);
+    if (!mapel_id || !kelas_id) return;
+    if (ajarList.some(a => a.mapel_id === mapel_id && a.kelas_id === kelas_id)) {
+      showMsg("msgAjar", "Pasangan mapel+kelas itu sudah ada.", "error"); return;
+    }
+    const m = daftarMapel.find(x => x.id === mapel_id);
+    const k = daftarKelas.find(x => x.id === kelas_id);
+    ajarList.push({ mapel_id, kelas_id, mapel_nama: m.nama, kelas_nama: k.nama });
+    hideMsg("msgAjar"); renderAjar();
+  });
+  document.getElementById("btnSimpanAjar").addEventListener("click", async () => {
+    hideMsg("msgAjar");
+    const r = await api(`/api/admin/guru/${ajarGuruId}/ajar`, {
+      method: "PUT",
+      body: JSON.stringify({ daftar: ajarList.map(a => ({ mapel_id: a.mapel_id, kelas_id: a.kelas_id })) }),
+    });
+    if (r.ok) { showMsg("msgAjar", `Tersimpan: ${r.data.jumlah} penugasan.`, "ok"); muat(); }
+    else showMsg("msgAjar", (r.data && r.data.error) || "Gagal menyimpan", "error");
+  });
+  document.getElementById("btnTutupAjar").addEventListener("click", () => {
+    document.getElementById("panelAjar").style.display = "none";
+  });
+  // tampilkan panel saat bukaAjar dipanggil
+  const _bukaAjar = bukaAjar;
+  bukaAjar = async (id) => { document.getElementById("panelAjar").style.display = ""; await _bukaAjar(id); };
+  window.bukaAjar = bukaAjar; window.mulaiEdit = mulaiEdit; window.hapus = hapus; window.hapusAjar = hapusAjar;
+  await muatRef();
+  await muat();
+})();
+</script>
+</body>
+</html>

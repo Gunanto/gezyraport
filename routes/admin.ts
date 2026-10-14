@@ -1,0 +1,545 @@
+import { Hono } from "hono";
+import { db } from "../db";
+import { requireRole } from "../auth";
+import { parseCSV, csvField } from "../util";
+
+const admin = new Hono();
+admin.use(requireRole("admin"));
+
+/* ================= USERS ================= */
+
+admin.get("/users", (c) => {
+  const rows = db
+    .query(
+      `SELECT u.id, u.username, u.role, u.created_at,
+              g.id AS guru_id, g.nama AS guru_nama,
+              s.id AS siswa_id, s.nama AS siswa_nama, s.nis
+       FROM users u
+       LEFT JOIN guru g ON g.user_id = u.id
+       LEFT JOIN siswa s ON s.user_id = u.id
+       ORDER BY u.id`
+    )
+    .all();
+  return c.json({ users: rows });
+});
+
+admin.post("/users", async (c) => {
+  const { username, password, role, nama, nip, siswa_id } = await c.req.json();
+  if (!username || !password || !role)
+    return c.json({ error: "Username, password, dan role wajib diisi" }, 400);
+  if (!["admin", "guru", "siswa"].includes(role))
+    return c.json({ error: "Role tidak valid" }, 400);
+  if (role === "guru" && !nama)
+    return c.json({ error: "Nama guru wajib diisi" }, 400);
+  if (role === "siswa" && !siswa_id)
+    return c.json({ error: "Untuk role siswa, pilih data siswa" }, 400);
+
+  const hash = await Bun.password.hash(String(password));
+  try {
+    const r = db
+      .query(
+        "INSERT INTO users (username, password_hash, role, created_at) VALUES (?,?,?,datetime('now'))"
+      )
+      .run(String(username).trim(), hash, role);
+    const uid = Number(r.lastInsertRowid);
+    if (role === "guru") {
+      db.query("INSERT INTO guru (user_id, nama, nip) VALUES (?,?,?)").run(
+        uid,
+        nama,
+        nip || null
+      );
+    }
+    if (role === "siswa") {
+      const sw = db.query("SELECT id, user_id FROM siswa WHERE id = ?").get(
+        siswa_id
+      ) as any;
+      if (!sw) {
+        db.query("DELETE FROM users WHERE id = ?").run(uid);
+        return c.json({ error: "Data siswa tidak ditemukan" }, 400);
+      }
+      if (sw.user_id) {
+        db.query("DELETE FROM users WHERE id = ?").run(uid);
+        return c.json({ error: "Siswa tersebut sudah punya akun" }, 400);
+      }
+      db.query("UPDATE siswa SET user_id = ? WHERE id = ?").run(uid, siswa_id);
+    }
+    return c.json({ ok: true, id: uid });
+  } catch {
+    return c.json({ error: "Username sudah dipakai" }, 400);
+  }
+});
+
+admin.put("/users/:id", async (c) => {
+  const id = c.req.param("id");
+  const { username, password, nama, nip } = await c.req.json();
+  const u = db.query("SELECT * FROM users WHERE id = ?").get(id) as any;
+  if (!u) return c.json({ error: "User tidak ditemukan" }, 404);
+  if (username && username !== u.username) {
+    try {
+      db.query("UPDATE users SET username = ? WHERE id = ?").run(username, id);
+    } catch {
+      return c.json({ error: "Username sudah dipakai" }, 400);
+    }
+  }
+  if (password)
+    db.query("UPDATE users SET password_hash = ? WHERE id = ?").run(
+      await Bun.password.hash(String(password)),
+      id
+    );
+  if (u.role === "guru") {
+    const g = db.query("SELECT id FROM guru WHERE user_id = ?").get(id) as any;
+    if (g)
+      db.query(
+        "UPDATE guru SET nama = COALESCE(?, nama), nip = COALESCE(?, nip) WHERE id = ?"
+      ).run(nama ?? null, nip ?? null, g.id);
+  }
+  return c.json({ ok: true });
+});
+
+admin.delete("/users/:id", (c) => {
+  const id = c.req.param("id");
+  const me = c.get("user") as any;
+  if (Number(id) === me.id)
+    return c.json({ error: "Tidak bisa menghapus akun sendiri" }, 400);
+  const ada = db.query("SELECT id FROM users WHERE id = ?").get(id);
+  if (!ada) return c.json({ error: "User tidak ditemukan" }, 404);
+  const g = db.query("SELECT id FROM guru WHERE user_id = ?").get(id) as any;
+  if (g) {
+    db.query("DELETE FROM guru_mapel WHERE guru_id = ?").run(g.id);
+    db.query("DELETE FROM rentang_nilai WHERE guru_id = ?").run(g.id);
+    db.query("UPDATE kelas SET wali_guru_id = NULL WHERE wali_guru_id = ?").run(
+      g.id
+    );
+    db.query("DELETE FROM guru WHERE id = ?").run(g.id);
+  }
+  db.query("UPDATE siswa SET user_id = NULL WHERE user_id = ?").run(id);
+  db.query("DELETE FROM sessions WHERE user_id = ?").run(id);
+  db.query("DELETE FROM users WHERE id = ?").run(id);
+  return c.json({ ok: true });
+});
+
+/* ================= MAPEL ================= */
+
+admin.get("/mapel", (c) => {
+  const rows = db
+    .query("SELECT * FROM mapel ORDER BY urutan, id")
+    .all();
+  return c.json({ mapel: rows });
+});
+
+admin.post("/mapel", async (c) => {
+  const { nama, kode, urutan, aktif } = await c.req.json();
+  if (!nama || !kode)
+    return c.json({ error: "Nama dan kode mapel wajib diisi" }, 400);
+  try {
+    const maxU = (
+      db.query("SELECT COALESCE(MAX(urutan),0) AS m FROM mapel").get() as any
+    ).m;
+    const r = db
+      .query("INSERT INTO mapel (nama, kode, urutan, aktif) VALUES (?,?,?,?)")
+      .run(nama, String(kode).toUpperCase().trim(), urutan ?? maxU + 1, aktif ?? 1);
+    return c.json({ ok: true, id: Number(r.lastInsertRowid) });
+  } catch {
+    return c.json({ error: "Kode mapel sudah dipakai" }, 400);
+  }
+});
+
+admin.put("/mapel/:id", async (c) => {
+  const id = c.req.param("id");
+  const { nama, kode, urutan, aktif } = await c.req.json();
+  const ada = db.query("SELECT id FROM mapel WHERE id = ?").get(id);
+  if (!ada) return c.json({ error: "Mapel tidak ditemukan" }, 404);
+  try {
+    db.query(
+      `UPDATE mapel SET nama = COALESCE(?, nama), kode = COALESCE(?, kode),
+       urutan = COALESCE(?, urutan), aktif = COALESCE(?, aktif) WHERE id = ?`
+    ).run(
+      nama ?? null,
+      kode ? String(kode).toUpperCase().trim() : null,
+      urutan ?? null,
+      aktif ?? null,
+      id
+    );
+  } catch {
+    return c.json({ error: "Kode mapel sudah dipakai" }, 400);
+  }
+  return c.json({ ok: true });
+});
+
+admin.delete("/mapel/:id", (c) => {
+  const id = c.req.param("id");
+  const dipakai = (
+    db
+      .query(
+        `SELECT (SELECT COUNT(*) FROM nilai WHERE mapel_id = ?)
+         + (SELECT COUNT(*) FROM rentang_nilai WHERE mapel_id = ?)
+         + (SELECT COUNT(*) FROM guru_mapel WHERE mapel_id = ?) AS jml`
+      )
+      .get(id, id, id) as any
+  ).jml;
+  if (dipakai > 0)
+    return c.json(
+      {
+        error:
+          "Mapel sudah dipakai (ada nilai/rentang/penugasan). Nonaktifkan saja lewat kolom Aktif.",
+      },
+      400
+    );
+  db.query("DELETE FROM mapel WHERE id = ?").run(id);
+  return c.json({ ok: true });
+});
+
+/* ================= KELAS ================= */
+
+admin.get("/kelas", (c) => {
+  const rows = db
+    .query(
+      `SELECT k.*, g.nama AS wali_nama,
+              (SELECT COUNT(*) FROM siswa s WHERE s.kelas_id = k.id) AS jml_siswa
+       FROM kelas k LEFT JOIN guru g ON g.id = k.wali_guru_id
+       ORDER BY k.tingkat, k.nama`
+    )
+    .all();
+  return c.json({ kelas: rows });
+});
+
+admin.post("/kelas", async (c) => {
+  const { nama, tingkat, wali_guru_id, tahun_ajaran, semester } =
+    await c.req.json();
+  if (!nama) return c.json({ error: "Nama kelas wajib diisi" }, 400);
+  const r = db
+    .query(
+      "INSERT INTO kelas (nama, tingkat, wali_guru_id, tahun_ajaran, semester) VALUES (?,?,?,?,?)"
+    )
+    .run(
+      nama,
+      tingkat || null,
+      wali_guru_id || null,
+      tahun_ajaran || null,
+      semester || null
+    );
+  return c.json({ ok: true, id: Number(r.lastInsertRowid) });
+});
+
+admin.put("/kelas/:id", async (c) => {
+  const id = c.req.param("id");
+  const { nama, tingkat, wali_guru_id, tahun_ajaran, semester } =
+    await c.req.json();
+  const ada = db.query("SELECT id FROM kelas WHERE id = ?").get(id);
+  if (!ada) return c.json({ error: "Kelas tidak ditemukan" }, 404);
+  db.query(
+    `UPDATE kelas SET nama = COALESCE(?, nama), tingkat = COALESCE(?, tingkat),
+     wali_guru_id = ?, tahun_ajaran = COALESCE(?, tahun_ajaran),
+     semester = COALESCE(?, semester) WHERE id = ?`
+  ).run(
+    nama ?? null,
+    tingkat ?? null,
+    wali_guru_id ?? null,
+    tahun_ajaran ?? null,
+    semester ?? null,
+    id
+  );
+  return c.json({ ok: true });
+});
+
+admin.delete("/kelas/:id", (c) => {
+  const id = c.req.param("id");
+  const jml = (
+    db.query("SELECT COUNT(*) AS j FROM siswa WHERE kelas_id = ?").get(id) as any
+  ).j;
+  if (jml > 0)
+    return c.json(
+      { error: `Kelas masih berisi ${jml} siswa. Pindahkan dulu siswanya.` },
+      400
+    );
+  db.query("DELETE FROM guru_mapel WHERE kelas_id = ?").run(id);
+  db.query("DELETE FROM kelas WHERE id = ?").run(id);
+  return c.json({ ok: true });
+});
+
+/* ================= SISWA ================= */
+
+admin.get("/siswa", (c) => {
+  const kelas_id = c.req.query("kelas_id");
+  let sql = `SELECT s.*, k.nama AS kelas_nama, u.username
+             FROM siswa s
+             LEFT JOIN kelas k ON k.id = s.kelas_id
+             LEFT JOIN users u ON u.id = s.user_id`;
+  const params: any[] = [];
+  if (kelas_id) {
+    sql += " WHERE s.kelas_id = ?";
+    params.push(kelas_id);
+  }
+  sql += " ORDER BY k.nama, s.nama";
+  return c.json({ siswa: db.query(sql).all(...params) });
+});
+
+admin.post("/siswa", async (c) => {
+  const { nis, nama, kelas_id, agama, jenis_kelamin } = await c.req.json();
+  if (!nis || !nama)
+    return c.json({ error: "NIS dan nama wajib diisi" }, 400);
+  const jk = jenis_kelamin || null;
+  if (jk && !["L", "P"].includes(jk))
+    return c.json({ error: "Jenis kelamin harus L atau P" }, 400);
+  try {
+    const hash = await Bun.password.hash(String(nis));
+    const ur = db
+      .query(
+        "INSERT INTO users (username, password_hash, role, created_at) VALUES (?,?,?,datetime('now'))"
+      )
+      .run(String(nis).trim(), hash, "siswa");
+    const uid = Number(ur.lastInsertRowid);
+    const sr = db
+      .query(
+        "INSERT INTO siswa (user_id, nis, nama, kelas_id, agama, jenis_kelamin) VALUES (?,?,?,?,?,?)"
+      )
+      .run(uid, String(nis).trim(), nama, kelas_id || null, agama || null, jk);
+    return c.json({
+      ok: true,
+      id: Number(sr.lastInsertRowid),
+      username: String(nis).trim(),
+      password: String(nis).trim(),
+    });
+  } catch {
+    return c.json({ error: "NIS sudah dipakai" }, 400);
+  }
+});
+
+admin.put("/siswa/:id", async (c) => {
+  const id = c.req.param("id");
+  const { nis, nama, kelas_id, agama, jenis_kelamin } = await c.req.json();
+  const sw = db.query("SELECT * FROM siswa WHERE id = ?").get(id) as any;
+  if (!sw) return c.json({ error: "Siswa tidak ditemukan" }, 404);
+  const jk = jenis_kelamin || null;
+  if (jk && !["L", "P"].includes(jk))
+    return c.json({ error: "Jenis kelamin harus L atau P" }, 400);
+  try {
+    db.query(
+      `UPDATE siswa SET nis = COALESCE(?, nis), nama = COALESCE(?, nama),
+       kelas_id = ?, agama = ?, jenis_kelamin = ? WHERE id = ?`
+    ).run(
+      nis ? String(nis).trim() : null,
+      nama ?? null,
+      kelas_id ?? null,
+      agama ?? null,
+      jk,
+      id
+    );
+    // sinkronkan username bila akun dibuat otomatis (username == NIS lama)
+    if (nis && sw.user_id) {
+      const u = db
+        .query("SELECT username FROM users WHERE id = ?")
+        .get(sw.user_id) as any;
+      if (u && u.username === sw.nis)
+        db.query("UPDATE users SET username = ? WHERE id = ?").run(
+          String(nis).trim(),
+          sw.user_id
+        );
+    }
+  } catch {
+    return c.json({ error: "NIS sudah dipakai" }, 400);
+  }
+  return c.json({ ok: true });
+});
+
+admin.delete("/siswa/:id", (c) => {
+  const id = c.req.param("id");
+  const sw = db.query("SELECT * FROM siswa WHERE id = ?").get(id) as any;
+  if (!sw) return c.json({ error: "Siswa tidak ditemukan" }, 404);
+  db.query("DELETE FROM nilai WHERE siswa_id = ?").run(id);
+  db.query("DELETE FROM catatan_raport WHERE siswa_id = ?").run(id);
+  if (sw.user_id) {
+    const u = db
+      .query("SELECT username FROM users WHERE id = ?")
+      .get(sw.user_id) as any;
+    db.query("DELETE FROM sessions WHERE user_id = ?").run(sw.user_id);
+    db.query("DELETE FROM users WHERE id = ?").run(sw.user_id);
+    void u;
+  }
+  db.query("DELETE FROM siswa WHERE id = ?").run(id);
+  return c.json({ ok: true });
+});
+
+admin.get("/siswa/export", (c) => {
+  const rows = db
+    .query(
+      `SELECT s.nis, s.nama, k.nama AS kelas, s.agama, s.jenis_kelamin
+       FROM siswa s LEFT JOIN kelas k ON k.id = s.kelas_id
+       ORDER BY k.nama, s.nama`
+    )
+    .all() as any[];
+  const lines = ["nis,nama,kelas,agama,jenis_kelamin"];
+  for (const r of rows)
+    lines.push(
+      [r.nis, r.nama, r.kelas, r.agama, r.jenis_kelamin].map(csvField).join(",")
+    );
+  c.header("Content-Type", "text/csv; charset=utf-8");
+  c.header("Content-Disposition", 'attachment; filename="data-siswa.csv"');
+  return c.body("\uFEFF" + lines.join("\n"));
+});
+
+admin.post("/siswa/import", async (c) => {
+  const body = await c.req.parseBody();
+  const file = body["file"];
+  if (!file || typeof file === "string")
+    return c.json({ error: "File CSV tidak ditemukan" }, 400);
+  const text = await (file as File).text();
+  const rows = parseCSV(text);
+  if (!rows.length) return c.json({ error: "File kosong" }, 400);
+  let start = 0;
+  if (/nis/i.test(rows[0][0] ?? "")) start = 1;
+  let sukses = 0;
+  const gagal: string[] = [];
+  for (let i = start; i < rows.length; i++) {
+    const [nis, nama, kelasNama, agama, jkRaw] = rows[i].map((x) =>
+      (x ?? "").trim()
+    );
+    const no = i + 1;
+    if (!nis || !nama) {
+      gagal.push(`Baris ${no}: NIS/nama kosong`);
+      continue;
+    }
+    const jk = (jkRaw || "").toUpperCase();
+    if (jk && !["L", "P"].includes(jk)) {
+      gagal.push(`Baris ${no}: jenis kelamin harus L/P`);
+      continue;
+    }
+    let kelas_id: number | null = null;
+    if (kelasNama) {
+      const k = db
+        .query("SELECT id FROM kelas WHERE LOWER(nama) = LOWER(?)")
+        .get(kelasNama) as any;
+      if (!k) {
+        gagal.push(`Baris ${no}: kelas "${kelasNama}" tidak ditemukan`);
+        continue;
+      }
+      kelas_id = k.id;
+    }
+    try {
+      const hash = await Bun.password.hash(nis);
+      const ur = db
+        .query(
+          "INSERT INTO users (username, password_hash, role, created_at) VALUES (?,?,?,datetime('now'))"
+        )
+        .run(nis, hash, "siswa");
+      db.query(
+        "INSERT INTO siswa (user_id, nis, nama, kelas_id, agama, jenis_kelamin) VALUES (?,?,?,?,?,?)"
+      ).run(
+        Number(ur.lastInsertRowid),
+        nis,
+        nama,
+        kelas_id,
+        agama || null,
+        jk || null
+      );
+      sukses++;
+    } catch {
+      gagal.push(`Baris ${no}: NIS "${nis}" sudah dipakai`);
+    }
+  }
+  return c.json({ ok: true, sukses, gagal });
+});
+
+/* ================= GURU ================= */
+
+admin.get("/guru", (c) => {
+  const rows = db
+    .query(
+      `SELECT g.*, u.username,
+              (SELECT COUNT(*) FROM guru_mapel gm WHERE gm.guru_id = g.id) AS jml_ajar
+       FROM guru g LEFT JOIN users u ON u.id = g.user_id
+       ORDER BY g.nama`
+    )
+    .all();
+  return c.json({ guru: rows });
+});
+
+admin.post("/guru", async (c) => {
+  const { username, password, nama, nip } = await c.req.json();
+  if (!username || !password || !nama)
+    return c.json({ error: "Username, password, dan nama wajib diisi" }, 400);
+  const hash = await Bun.password.hash(String(password));
+  try {
+    const ur = db
+      .query(
+        "INSERT INTO users (username, password_hash, role, created_at) VALUES (?,?,?,datetime('now'))"
+      )
+      .run(String(username).trim(), hash, "guru");
+    const uid = Number(ur.lastInsertRowid);
+    const gr = db
+      .query("INSERT INTO guru (user_id, nama, nip) VALUES (?,?,?)")
+      .run(uid, nama, nip || null);
+    return c.json({ ok: true, id: Number(gr.lastInsertRowid) });
+  } catch {
+    return c.json({ error: "Username sudah dipakai" }, 400);
+  }
+});
+
+admin.put("/guru/:id", async (c) => {
+  const id = c.req.param("id");
+  const { nama, nip } = await c.req.json();
+  const ada = db.query("SELECT id FROM guru WHERE id = ?").get(id);
+  if (!ada) return c.json({ error: "Guru tidak ditemukan" }, 404);
+  db.query("UPDATE guru SET nama = COALESCE(?, nama), nip = ? WHERE id = ?").run(
+    nama ?? null,
+    nip ?? null,
+    id
+  );
+  return c.json({ ok: true });
+});
+
+admin.delete("/guru/:id", (c) => {
+  const id = c.req.param("id");
+  const g = db.query("SELECT * FROM guru WHERE id = ?").get(id) as any;
+  if (!g) return c.json({ error: "Guru tidak ditemukan" }, 404);
+  db.query("DELETE FROM guru_mapel WHERE guru_id = ?").run(id);
+  db.query("DELETE FROM rentang_nilai WHERE guru_id = ?").run(id);
+  db.query("UPDATE kelas SET wali_guru_id = NULL WHERE wali_guru_id = ?").run(id);
+  if (g.user_id) {
+    db.query("DELETE FROM sessions WHERE user_id = ?").run(g.user_id);
+    db.query("DELETE FROM users WHERE id = ?").run(g.user_id);
+  }
+  db.query("DELETE FROM guru WHERE id = ?").run(id);
+  return c.json({ ok: true });
+});
+
+admin.get("/guru/:id/ajar", (c) => {
+  const id = c.req.param("id");
+  const rows = db
+    .query(
+      `SELECT gm.mapel_id, m.nama AS mapel_nama, m.kode AS mapel_kode,
+              gm.kelas_id, k.nama AS kelas_nama
+       FROM guru_mapel gm
+       JOIN mapel m ON m.id = gm.mapel_id
+       JOIN kelas k ON k.id = gm.kelas_id
+       WHERE gm.guru_id = ? ORDER BY k.nama, m.urutan`
+    )
+    .all(id);
+  return c.json({ ajar: rows });
+});
+
+admin.put("/guru/:id/ajar", async (c) => {
+  const id = c.req.param("id");
+  const { daftar } = await c.req.json();
+  const ada = db.query("SELECT id FROM guru WHERE id = ?").get(id);
+  if (!ada) return c.json({ error: "Guru tidak ditemukan" }, 404);
+  if (!Array.isArray(daftar))
+    return c.json({ error: "daftar harus berupa array" }, 400);
+  for (const d of daftar) {
+    const m = db.query("SELECT id FROM mapel WHERE id = ?").get(d.mapel_id);
+    const k = db.query("SELECT id FROM kelas WHERE id = ?").get(d.kelas_id);
+    if (!m || !k)
+      return c.json({ error: "mapel_id/kelas_id tidak valid" }, 400);
+  }
+  const ganti = db.transaction(() => {
+    db.query("DELETE FROM guru_mapel WHERE guru_id = ?").run(id);
+    const ins = db.query(
+      "INSERT OR IGNORE INTO guru_mapel (guru_id, mapel_id, kelas_id) VALUES (?,?,?)"
+    );
+    for (const d of daftar) ins.run(id, d.mapel_id, d.kelas_id);
+  });
+  ganti();
+  return c.json({ ok: true, jumlah: daftar.length });
+});
+
+export default admin;

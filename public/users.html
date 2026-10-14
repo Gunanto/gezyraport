@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pengguna — GezyRaport</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">🎓 GezyRaport <small>SMPN 1 Punggur</small></div>
+  <nav id="nav"></nav>
+  <div class="spacer"></div>
+  <span class="userinfo" id="userInfo"></span>
+  <button class="btn small" id="btnLogout">Keluar</button>
+</header>
+<main class="container">
+  <div class="card">
+    <h2>👥 Kelola Pengguna</h2>
+    <div id="msg" class="alert hidden"></div>
+    <form id="formUser">
+      <input type="hidden" id="uid">
+      <div class="form-grid">
+        <label class="field">Username <input id="username" required></label>
+        <label class="field">Password <span class="muted" id="pwHint">(wajib diisi saat tambah baru)</span> <input id="password" type="password"></label>
+        <label class="field">Role
+          <select id="role">
+            <option value="admin">Admin</option>
+            <option value="guru">Guru</option>
+            <option value="siswa">Siswa/Ortu</option>
+          </select>
+        </label>
+      </div>
+      <div class="form-grid" id="guruFields" style="margin-top:.8rem">
+        <label class="field">Nama Guru <input id="nama"></label>
+        <label class="field">NIP <input id="nip"></label>
+      </div>
+      <div class="form-grid hidden" id="siswaFields" style="margin-top:.8rem">
+        <label class="field">Pilih Siswa (yang belum punya akun)
+          <select id="siswa_id"><option value="">— pilih —</option></select>
+        </label>
+      </div>
+      <div class="toolbar">
+        <button class="btn" type="submit" id="btnSimpan">Tambah</button>
+        <button class="btn red hidden" type="button" id="btnBatal">Batal</button>
+      </div>
+    </form>
+  </div>
+  <div class="card">
+    <h3>Daftar Pengguna</h3>
+    <div style="overflow-x:auto">
+    <table class="data" id="tabelUser">
+      <thead><tr><th>Username</th><th>Role</th><th>Terhubung</th><th>Aksi</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    </div>
+  </div>
+</main>
+<script src="/js/common.js"></script>
+<script>
+let daftarUser = [];
+const AGAMA = ["Islam","Kristen","Katolik","Hindu","Buddha","Konghucu"];
+
+function toggleFields() {
+  const role = document.getElementById("role").value;
+  document.getElementById("guruFields").classList.toggle("hidden", role !== "guru");
+  document.getElementById("siswaFields").classList.toggle("hidden", role !== "siswa");
+}
+
+async function muatSiswaTanpaAkun() {
+  const r = await api("/api/admin/siswa");
+  const sel = document.getElementById("siswa_id");
+  sel.innerHTML = '<option value="">— pilih —</option>';
+  if (r.ok) {
+    for (const s of r.data.siswa) {
+      if (!s.user_id) {
+        const o = document.createElement("option");
+        o.value = s.id;
+        o.textContent = `${s.nama} (${s.nis})`;
+        sel.appendChild(o);
+      }
+    }
+  }
+}
+
+async function muatUser() {
+  const r = await api("/api/admin/users");
+  if (!r.ok) return showMsg("msg", (r.data && r.data.error) || "Gagal memuat", "error");
+  daftarUser = r.data.users;
+  const tb = document.querySelector("#tabelUser tbody");
+  tb.innerHTML = daftarUser.map(u => {
+    const hub = u.role === "guru" ? esc(u.guru_nama || "-")
+      : u.role === "siswa" ? esc((u.siswa_nama || "-") + (u.nis ? " (" + u.nis + ")" : ""))
+      : "-";
+    return `<tr>
+      <td>${esc(u.username)}</td>
+      <td>${esc(ROLE_NAMES[u.role] || u.role)}</td>
+      <td>${hub}</td>
+      <td>
+        <button class="btn small" onclick="mulaiEdit(${u.id})">Ubah</button>
+        <button class="btn small red" onclick="hapus(${u.id}, '${esc(u.username)}')">Hapus</button>
+      </td>
+    </tr>`;
+  }).join("");
+}
+
+function mulaiEdit(id) {
+  const u = daftarUser.find(x => x.id === id);
+  if (!u) return;
+  document.getElementById("uid").value = u.id;
+  document.getElementById("username").value = u.username;
+  document.getElementById("password").value = "";
+  document.getElementById("role").value = u.role;
+  document.getElementById("role").disabled = true;
+  document.getElementById("pwHint").textContent = "(kosongkan bila tidak diganti)";
+  if (u.role === "guru") {
+    document.getElementById("nama").value = u.guru_nama || "";
+    document.getElementById("nip").value = "";
+  }
+  toggleFields();
+  document.getElementById("btnSimpan").textContent = "Simpan Perubahan";
+  document.getElementById("btnBatal").classList.remove("hidden");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function resetForm() {
+  document.getElementById("formUser").reset();
+  document.getElementById("uid").value = "";
+  document.getElementById("role").disabled = false;
+  document.getElementById("pwHint").textContent = "(wajib diisi saat tambah baru)";
+  document.getElementById("btnSimpan").textContent = "Tambah";
+  document.getElementById("btnBatal").classList.add("hidden");
+  toggleFields();
+}
+
+async function hapus(id, username) {
+  if (!await confirmHapus(`Hapus akun "${username}"?`)) return;
+  const r = await api(`/api/admin/users/${id}`, { method: "DELETE" });
+  if (r.ok) { showMsg("msg", "Akun dihapus.", "ok"); muatUser(); muatSiswaTanpaAkun(); }
+  else showMsg("msg", (r.data && r.data.error) || "Gagal menghapus", "error");
+}
+
+(async () => {
+  const user = await requireLogin(["admin"]);
+  if (!user) return;
+  document.getElementById("role").addEventListener("change", toggleFields);
+  document.getElementById("btnBatal").addEventListener("click", resetForm);
+  document.getElementById("formUser").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    hideMsg("msg");
+    const id = document.getElementById("uid").value;
+    const payload = {
+      username: document.getElementById("username").value.trim(),
+      password: document.getElementById("password").value,
+      role: document.getElementById("role").value,
+      nama: document.getElementById("nama").value.trim(),
+      nip: document.getElementById("nip").value.trim(),
+      siswa_id: document.getElementById("siswa_id").value || null,
+    };
+    let r;
+    if (id) {
+      if (!payload.password) delete payload.password;
+      r = await api(`/api/admin/users/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+    } else {
+      r = await api("/api/admin/users", { method: "POST", body: JSON.stringify(payload) });
+    }
+    if (r.ok) {
+      showMsg("msg", id ? "Perubahan disimpan." : "Akun ditambahkan.", "ok");
+      resetForm(); muatUser(); muatSiswaTanpaAkun();
+    } else showMsg("msg", (r.data && r.data.error) || "Gagal menyimpan", "error");
+  });
+  toggleFields();
+  await muatUser();
+  await muatSiswaTanpaAkun();
+})();
+</script>
+</body>
+</html>
