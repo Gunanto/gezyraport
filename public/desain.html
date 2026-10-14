@@ -49,7 +49,7 @@
   </div>
   <div class="card hidden" id="pratinjauWrap">
     <h3>👁 Pratinjau Tampilan Raport</h3>
-    <p class="muted">Diambil dari isian form di atas (belum harus disimpan).</p>
+    <p class="muted">Raport lengkap satu siswa contoh (data asli) dengan isian form di atas — belum harus disimpan.</p>
     <div class="kertas" id="pratinjauKertas"></div>
   </div>
   <div class="card">
@@ -65,6 +65,7 @@
   </div>
 </main>
 <script src="/js/common.js?v=20261014c"></script>
+<script src="/js/cetak.js?v=20261014c"></script>
 <script>
 let kopPath = null;
 function renderKop(kop_path) {
@@ -76,39 +77,6 @@ function renderKop(kop_path) {
   } else {
     box.innerHTML = '<p class="muted">Belum ada gambar kop — raport memakai kop teks (nama sekolah).</p>';
   }
-}
-
-/** HTML pratinjau — markup sama persis dengan halaman cetak raport. */
-function pratinjauHtml(v) {
-  const kopHtml = v.kop
-    ? `<div class="kop"><img src="${esc(v.kop)}" alt="Kop raport" class="kop-img"></div>`
-    : `<div class="kop">
-    <h2>${esc(v.nama_sekolah || "SMP NEGERI 1 PUNGGUR")}</h2>
-    ${v.alamat_sekolah ? `<p>${esc(v.alamat_sekolah)}</p>` : ""}
-  </div>`;
-  const tgl = v.tanggal_raport
-    ? new Date(v.tanggal_raport + "T00:00:00").toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })
-    : new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
-  const tempat = v.tempat || v.kota || "";
-  return `
-  ${kopHtml}
-  <div class="judul-raport"><h3>${esc(v.judul_raport || "LAPORAN HASIL BELAJAR PESERTA DIDIK")}</h3></div>
-  <table class="identitas">
-    <tr><td style="width:170px">Nama Peserta Didik</td><td style="width:10px">:</td><td><b>....................</b></td>
-        <td style="width:150px">Kelas</td><td style="width:10px">:</td><td>........</td></tr>
-    <tr><td>NIS</td><td>:</td><td>........</td>
-        <td>Semester</td><td>:</td><td>${esc(v.semester_aktif || "Ganjil")}</td></tr>
-    <tr><td>Jenis Kelamin</td><td>:</td><td>........</td>
-        <td>Tahun Ajaran</td><td>:</td><td>${esc(v.tahun_ajaran_aktif || "")}</td></tr>
-  </table>
-  <p class="muted" style="text-align:center">⋮ tabel nilai, catatan, dan kehadiran tampil di sini ⋮</p>
-  <div class="ttd">
-    <div class="kolom"></div>
-    <div class="kolom">${esc(tempat)}${tempat ? "," : ""} ${esc(tgl)}<br>Kepala Sekolah<br><br><br>
-      <div class="nama">${esc(v.kepala_nama || "........................")}</div>
-      ${v.kepala_nip ? `NIP. ${esc(v.kepala_nip)}` : ""}
-    </div>
-  </div>`;
 }
 
 function bacaFormDesain() {
@@ -171,8 +139,39 @@ async function muat() {
     document.getElementById("tanggal_raport").value = "";
     showMsg("msg", "Tanggal dikosongkan — raport akan memakai tanggal hari ini. Klik Simpan Desain.", "ok");
   });
-  document.getElementById("btnPratinjau").addEventListener("click", () => {
-    document.getElementById("pratinjauKertas").innerHTML = pratinjauHtml(bacaFormDesain());
+  document.getElementById("btnPratinjau").addEventListener("click", async () => {
+    const box = document.getElementById("pratinjauKertas");
+    hideMsg("msg");
+    box.innerHTML = '<p class="muted">Memuat pratinjau...</p>';
+    // ambil satu siswa contoh (data asli)
+    const rs = await api("/api/admin/siswa?page=1&limit=1");
+    const contoh = rs.ok && rs.data.siswa.length ? rs.data.siswa[0] : null;
+    if (!contoh) {
+      box.innerHTML = '<p class="muted">Belum ada data siswa — tambahkan dulu di menu Siswa agar pratinjau lengkap bisa ditampilkan.</p>';
+    } else {
+      const r = await api(`/api/raport?siswa_id=${contoh.id}`);
+      if (!r.ok) {
+        box.innerHTML = '<p class="muted">Gagal memuat data raport contoh.</p>';
+      } else {
+        const d = r.data;
+        const f = bacaFormDesain();
+        // timpa bagian desain dengan isian form — bisa coba-coba sebelum disimpan
+        d.sekolah.nama = f.nama_sekolah || d.sekolah.nama;
+        d.sekolah.alamat = f.alamat_sekolah;
+        d.sekolah.judul = f.judul_raport || d.sekolah.judul;
+        d.sekolah.kop = f.kop;
+        d.ttd.kepala_nama = f.kepala_nama;
+        d.ttd.kepala_nip = f.kepala_nip;
+        d.ttd.tempat = (f.tempat || f.kota || "").trim();
+        if (f.tanggal_raport) {
+          d.ttd.tanggal_teks = new Date(f.tanggal_raport + "T00:00:00")
+            .toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
+        }
+        box.innerHTML =
+          `<p class="muted">Contoh raport milik <b>${esc(contoh.nama)}</b> (${esc(contoh.kelas_nama || "-")}) — data asli dari database.</p>` +
+          renderCetak(d);
+      }
+    }
     document.getElementById("pratinjauWrap").classList.remove("hidden");
     document.getElementById("pratinjauWrap").scrollIntoView({ behavior: "smooth", block: "start" });
   });
