@@ -40,7 +40,7 @@
   </div>
   <div class="card">
     <h3>Import / Export CSV</h3>
-    <p class="muted">Format kolom: <b>nis,nama,kelas,agama,jenis_kelamin</b> (jenis_kelamin: L/P). Nama kelas harus sama persis dengan data kelas.</p>
+    <p class="muted">Format kolom: <b>nis,nama,kelas,agama,jenis_kelamin</b> (jenis_kelamin: L/P). Nama kelas harus sama persis dengan data kelas. Import bersifat <b>sinkronisasi</b> via NIS — belum ada → ditambah, berubah → diperbarui, sama persis → diabaikan.</p>
     <div class="toolbar">
       <a class="btn green" href="/api/admin/siswa/export">⬇ Unduh / Export CSV</a>
       <input type="file" id="fileCsv" accept=".csv">
@@ -153,7 +153,7 @@ async function hapus(id, nama) {
     const data = await res.json();
     const box = document.getElementById("hasilImport");
     if (res.ok) {
-      box.innerHTML = `<div class="alert ok">Import selesai: ${data.sukses} berhasil.` +
+      box.innerHTML = `<div class="alert ok">Import selesai: ${data.sukses} berhasil (baru: ${data.dibuat || 0}, diperbarui: ${data.diupdate || 0}, diabaikan: ${data.diabaikan || 0}).` +
         (data.gagal.length ? `<br>Gagal:<ul>${data.gagal.map(g => `<li>${esc(g)}</li>`).join("")}</ul>` : "") + `</div>`;
       muat();
     } else {

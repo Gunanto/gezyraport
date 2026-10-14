@@ -389,7 +389,11 @@ admin.post("/siswa/import", async (c) => {
   if (!rows.length) return c.json({ error: "File kosong" }, 400);
   let start = 0;
   if (/nis/i.test(rows[0][0] ?? "")) start = 1;
-  let sukses = 0;
+  // Sinkronisasi via NIS: belum ada → tambah; ada & berubah → update; sama persis → abaikan
+  let sukses = 0,
+    dibuat = 0,
+    diupdate = 0,
+    diabaikan = 0;
   const gagal: string[] = [];
   for (let i = start; i < rows.length; i++) {
     const [nis, nama, kelasNama, agama, jkRaw] = rows[i].map((x) =>
@@ -417,28 +421,52 @@ admin.post("/siswa/import", async (c) => {
       kelas_id = k.id;
     }
     try {
-      const hash = await Bun.password.hash(nis);
-      const ur = db
+      const ex = db
         .query(
-          "INSERT INTO users (username, password_hash, role, created_at) VALUES (?,?,?,datetime('now'))"
+          "SELECT id, nama, kelas_id, agama, jenis_kelamin FROM siswa WHERE nis = ?"
         )
-        .run(nis, hash, "siswa");
-      db.query(
-        "INSERT INTO siswa (user_id, nis, nama, kelas_id, agama, jenis_kelamin) VALUES (?,?,?,?,?,?)"
-      ).run(
-        Number(ur.lastInsertRowid),
-        nis,
-        nama,
-        kelas_id,
-        agama || null,
-        jk || null
-      );
+        .get(nis) as any;
+      if (!ex) {
+        const hash = await Bun.password.hash(nis);
+        const ur = db
+          .query(
+            "INSERT INTO users (username, password_hash, role, created_at) VALUES (?,?,?,datetime('now'))"
+          )
+          .run(nis, hash, "siswa");
+        db.query(
+          "INSERT INTO siswa (user_id, nis, nama, kelas_id, agama, jenis_kelamin) VALUES (?,?,?,?,?,?)"
+        ).run(
+          Number(ur.lastInsertRowid),
+          nis,
+          nama,
+          kelas_id,
+          agama || null,
+          jk || null
+        );
+        dibuat++;
+      } else {
+        const sama =
+          ex.nama === nama &&
+          (ex.kelas_id ?? null) === kelas_id &&
+          (ex.agama || "") === (agama || "") &&
+          (ex.jenis_kelamin || null) === (jk || null);
+        if (sama) {
+          diabaikan++;
+          continue;
+        }
+        db.query(
+          "UPDATE siswa SET nama=?, kelas_id=?, agama=?, jenis_kelamin=? WHERE id=?"
+        ).run(nama, kelas_id, agama || null, jk || null, ex.id);
+        diupdate++;
+      }
       sukses++;
-    } catch {
-      gagal.push(`Baris ${no}: NIS "${nis}" sudah dipakai`);
+    } catch (e) {
+      gagal.push(
+        `Baris ${no}: gagal menyimpan (${(e as Error)?.message ?? "galat"})`
+      );
     }
   }
-  return c.json({ ok: true, sukses, gagal });
+  return c.json({ ok: true, sukses, dibuat, diupdate, diabaikan, gagal });
 });
 
 /* ================= GURU ================= */
@@ -683,9 +711,11 @@ admin.post("/guru/import", async (c) => {
   const col = (r: string[], k: string) =>
     idx[k] === undefined ? "" : (r[idx[k]] ?? "").trim();
   const adaKolomTugas = idx["mapel"] !== undefined || idx["kelas"] !== undefined;
+  // Sinkronisasi via username: belum ada → tambah; ada & berubah → update; sama persis → abaikan
   let sukses = 0,
     dibuat = 0,
-    diupdate = 0;
+    diupdate = 0,
+    diabaikan = 0;
   const gagal: string[] = [];
   for (let i = start; i < rows.length; i++) {
     const r = rows[i];
@@ -750,13 +780,40 @@ admin.post("/guru/import", async (c) => {
     try {
       const ex = db
         .query(
-          "SELECT g.id, g.user_id FROM guru g JOIN users u ON u.id = g.user_id WHERE u.username = ?"
+          "SELECT g.id, g.user_id, g.nama, g.nip, g.is_bk, g.is_ekskul, g.is_staf, g.jabatan FROM guru g JOIN users u ON u.id = g.user_id WHERE u.username = ?"
         )
         .get(username) as any;
       const nip = col(r, "nip") || null;
       const pw = col(r, "password");
+      const fJabatan = is_staf ? jabatan : null;
       let gid: number;
       if (ex) {
+        // bandingkan dulu: sama persis → abaikan
+        let berubah =
+          ex.nama !== nama ||
+          (ex.nip ?? null) !== nip ||
+          !!ex.is_bk !== is_bk ||
+          !!ex.is_ekskul !== is_ekskul ||
+          !!ex.is_staf !== is_staf ||
+          (ex.jabatan ?? null) !== fJabatan;
+        if (pw) berubah = true; // password diisi = perubahan
+        if (adaKolomTugas) {
+          const baru: string[] = (tugas as Array<[number, number]>)
+            .map(([m, k]) => `${m}:${k}`)
+            .sort();
+          const lama = (
+            db
+              .query(
+                "SELECT mapel_id, kelas_id FROM guru_mapel WHERE guru_id = ? ORDER BY mapel_id, kelas_id"
+              )
+              .all(ex.id) as any[]
+          ).map((a) => `${a.mapel_id}:${a.kelas_id}`);
+          if (JSON.stringify(lama) !== JSON.stringify(baru)) berubah = true;
+        }
+        if (!berubah) {
+          diabaikan++;
+          continue;
+        }
         db.query(
           `UPDATE guru SET nama=?, nip=?, is_bk=?, is_ekskul=?, is_staf=?, jabatan=? WHERE id=?`
         ).run(
@@ -765,7 +822,7 @@ admin.post("/guru/import", async (c) => {
           is_bk ? 1 : 0,
           is_ekskul ? 1 : 0,
           is_staf ? 1 : 0,
-          is_staf ? jabatan : null,
+          fJabatan,
           ex.id
         );
         if (pw)
@@ -815,7 +872,7 @@ admin.post("/guru/import", async (c) => {
       );
     }
   }
-  return c.json({ ok: true, sukses, dibuat, diupdate, gagal });
+  return c.json({ ok: true, sukses, dibuat, diupdate, diabaikan, gagal });
 });
 
 /* ================= DESAIN RAPORT ================= */

@@ -29,7 +29,7 @@ Akun siswa dibuat otomatis: username & password = **NIS**.
 
 ## Alur pakai (Fase 1)
 
-1. **Admin** login → isi **Guru** (nama + NIP + akun), **Kelas** (nama + wali kelas), **Siswa** (atau Import CSV), atur **Penugasan Mengajar** tiap guru (mapel × kelas). Cek **Mapel** (12 mapel bawaan, urutan bisa diubah).
+1. **Admin** login → isi **Guru** (nama + NIP + akun, atau Import CSV sinkronisasi), **Kelas** (nama + wali kelas), **Siswa** (atau Import CSV sinkronisasi via NIS), atur **Penugasan Mengajar** tiap guru (mapel × kelas, atau via kolom `mapel`/`kelas` di CSV guru). Cek **Mapel** (12 mapel bawaan, urutan bisa diubah).
 2. **Guru** login → **Rentang Nilai**: tetapkan rentang predikat per mapel (atau pakai bawaan). → **Input Nilai**: pilih kelas + mapel, isi nilai 0–100 per siswa (atau Unduh Template CSV → isi di Excel → Import CSV).
 3. **Siswa/Ortu** login → **Raport Saya** → **Cetak / Simpan PDF** (lewat dialog print browser).
 
@@ -59,8 +59,8 @@ Template CSV terisi data yang sudah tersimpan (sekaligus export). Saat import: t
 
 Kolom: `username,nama,nip,password,is_bk,is_ekskul,is_staf,jabatan,mapel,kelas`
 
-- Dicocokkan via `username`: sudah ada → diperbarui, baru → dibuat.
-- `password`: kosong = tidak diubah (guru baru: default = username). Isi untuk mereset password.
+- Import bersifat **sinkronisasi** via `username`: belum ada → ditambah, berubah → diperbarui, **sama persis → diabaikan** (tidak dihitung sebagai update).
+- `password`: kosong = tidak diubah (guru baru: default = username). Isi untuk mereset password (dianggap perubahan).
 - `is_bk`/`is_ekskul`/`is_staf`: `1`/`ya`/`yes`/`true`/`y` (tak peduli kapital) = ya.
 - `jabatan`: wajib diisi bila `is_staf` = ya (mis. `Kepala Sekolah`, `Waka Kurikulum`).
 - `mapel`: kode mapel dipisah `;` (mis. `MTK;IPA`); `kelas`: nama kelas dipisah `;` (mis. `7A;7B`). Bila kedua kolom ada di file, kombinasinya **menggantikan** penugasan mengajar guru tersebut (kosong = hapus semua penugasan). Kode/nama yang tidak dikenal membuat baris itu gagal.
