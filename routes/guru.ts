@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { db } from "../db";
 import { requireRole } from "../auth";
-import { parseCSV, csvField, periodeAktif, DEFAULT_RENTANG } from "../util";
+import { parseCSV, csvField, periodeAktif, DEFAULT_RENTANG, nisExcel, normalisasiNIS } from "../util";
 
 const guru = new Hono();
 guru.use(requireRole("guru"));
@@ -211,7 +211,7 @@ guru.get("/nilai/template", (c) => {
   const lines = ["nis,nama,kelas,nilai"];
   for (const r of rows)
     lines.push(
-      [r.nis, r.nama, r.kelas, r.nilai_angka ?? ""].map(csvField).join(",")
+      [nisExcel(r.nis), r.nama, r.kelas, r.nilai_angka ?? ""].map(csvField).join(",")
     );
   const kelasNama = rows[0]?.kelas ?? "kelas";
   c.header("Content-Type", "text/csv; charset=utf-8");
@@ -253,7 +253,7 @@ guru.post("/nilai/import", async (c) => {
     );
     for (let i = start; i < rows.length; i++) {
       const no = i + 1;
-      const nis = (rows[i][0] ?? "").trim();
+      const nis = normalisasiNIS(rows[i][0]);
       const nilaiRaw = (rows[i][3] ?? "").trim();
       if (!nis) {
         gagal.push(`Baris ${no}: NIS kosong`);
@@ -265,9 +265,18 @@ guru.post("/nilai/import", async (c) => {
         gagal.push(`Baris ${no}: nilai "${nilaiRaw}" harus 0–100`);
         continue;
       }
-      const sw = db
+      let sw = db
         .query("SELECT id FROM siswa WHERE nis = ? AND kelas_id = ?")
         .get(nis, kelas_id) as any;
+      if (!sw) {
+        // Fallback: Excel menghilangkan nol di depan NIS → cocokkan longgar bila tunggal
+        const cands = db
+          .query(
+            "SELECT id FROM siswa WHERE kelas_id = ? AND LTRIM(nis, '0') = LTRIM(?, '0')"
+          )
+          .all(kelas_id, nis) as any[];
+        if (cands.length === 1) sw = cands[0];
+      }
       if (!sw) {
         gagal.push(`Baris ${no}: NIS "${nis}" bukan siswa kelas ini`);
         continue;

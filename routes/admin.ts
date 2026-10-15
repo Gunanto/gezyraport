@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { db } from "../db";
 import { requireRole } from "../auth";
-import { parseCSV, csvField, validTanggalISO } from "../util";
+import { parseCSV, csvField, validTanggalISO, nisExcel, normalisasiNIS } from "../util";
 import { existsSync, mkdirSync, unlinkSync } from "node:fs";
 
 const admin = new Hono();
@@ -387,7 +387,7 @@ admin.get("/siswa/export", (c) => {
   const lines = ["nis,nama,kelas,agama,jenis_kelamin"];
   for (const r of rows)
     lines.push(
-      [r.nis, r.nama, r.kelas, r.agama, r.jenis_kelamin].map(csvField).join(",")
+      [nisExcel(r.nis), r.nama, r.kelas, r.agama, r.jenis_kelamin].map(csvField).join(",")
     );
   c.header("Content-Type", "text/csv; charset=utf-8");
   c.header("Content-Disposition", 'attachment; filename="data-siswa.csv"');
@@ -411,9 +411,10 @@ admin.post("/siswa/import", async (c) => {
     diabaikan = 0;
   const gagal: string[] = [];
   for (let i = start; i < rows.length; i++) {
-    const [nis, nama, kelasNama, agama, jkRaw] = rows[i].map((x) =>
+    const [nisRaw, nama, kelasNama, agama, jkRaw] = rows[i].map((x) =>
       (x ?? "").trim()
     );
+    const nis = normalisasiNIS(nisRaw);
     const no = i + 1;
     if (!nis || !nama) {
       gagal.push(`Baris ${no}: NIS/nama kosong`);

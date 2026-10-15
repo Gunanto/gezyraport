@@ -99,6 +99,21 @@ export function csvField(v: unknown): string {
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
+/** Tulis NIS ke CSV agar aman dibuka di Excel: `="0146034471"` dibaca Excel
+ *  sebagai teks sehingga nol di depan tidak hilang. */
+export function nisExcel(nis: unknown): string {
+  return `="${String(nis ?? "")}"`;
+}
+
+/** Kupas pembungkus formula Excel pada NIS dari file CSV
+ *  (mis. `="0146034471"` hasil unduhan template → `0146034471`). */
+export function normalisasiNIS(v: unknown): string {
+  let s = String(v ?? "").trim();
+  const m = s.match(/^="([\s\S]*)"$/);
+  if (m) s = m[1].trim();
+  return s;
+}
+
 /** Tanggal hari ini format Indonesia, mis. "14 Oktober 2026". */
 export function tanggalID(d: Date = new Date()): string {
   const bulan = [

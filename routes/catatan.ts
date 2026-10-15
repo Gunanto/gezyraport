@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { db } from "../db";
 import { requireRole } from "../auth";
-import { periodeAktif, parseCSV, csvField } from "../util";
+import { periodeAktif, parseCSV, csvField, nisExcel, normalisasiNIS } from "../util";
 
 /**
  * Fase 2 — input catatan raport + kehadiran.
@@ -382,7 +382,7 @@ catatan.get("/:fitur/template", (c) => {
   const lines = [f.csv.join(",")];
   for (const r of rows) {
     const vals = f.csv.map((col) => {
-      if (col === "nis") return r.nis;
+      if (col === "nis") return nisExcel(r.nis); // aman dari Excel yg menghapus nol depan
       if (col === "nama") return r.nama;
       if (KOLOM_ANGKA.has(col)) return r[col] ?? 0;
       return r[col] ?? "";
@@ -392,7 +392,7 @@ catatan.get("/:fitur/template", (c) => {
   c.header("Content-Type", "text/csv; charset=utf-8");
   c.header(
     "Content-Disposition",
-    `attachment; filename="template-${key}-${namaKelas(kelas_id)}.csv"`
+    `attachment; filename="template-catatan-${key}-${namaKelas(kelas_id)}.csv"`
   );
   return c.body("\uFEFF" + lines.join("\n"));
 });
@@ -424,14 +424,24 @@ catatan.post("/:fitur/import", async (c) => {
     for (let i = start; i < rows.length; i++) {
       const no = i + 1;
       const cells = rows[i].map((x) => (x ?? "").trim());
-      const nis = cells[0] || "";
+      const nis = normalisasiNIS(cells[0]);
       if (!nis) {
         gagal.push({ baris: no, alasan: "NIS kosong" });
         continue;
       }
-      const sw = db
+      let sw = db
         .query("SELECT id FROM siswa WHERE nis = ? AND kelas_id = ?")
         .get(nis, kelas_id) as any;
+      if (!sw) {
+        // Fallback: Excel sering menghilangkan nol di depan NIS.
+        // Cocokkan longgar (abaikan nol depan) bila hasilnya tunggal.
+        const cands = db
+          .query(
+            "SELECT id FROM siswa WHERE kelas_id = ? AND LTRIM(nis, '0') = LTRIM(?, '0')"
+          )
+          .all(kelas_id, nis) as any[];
+        if (cands.length === 1) sw = cands[0];
+      }
       if (!sw) {
         gagal.push({ baris: no, alasan: `NIS "${nis}" bukan siswa kelas ini` });
         continue;
