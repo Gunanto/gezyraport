@@ -93,7 +93,16 @@ export function namaMapelKelas(mapel_id: any, kelas_id?: any): string {
 }
 
 /** Parser CSV sederhana (mendukung field ber-quote). */
+/** Bungkus baris-baris CSV untuk diunduh: BOM + baris `sep=,` agar MS Excel
+ *  Windows (pemisah daftar `;`) langsung memecah kolom dengan benar. */
+export function bungkusCSV(lines: string[]): string {
+  return "\uFEFFsep=,\n" + lines.join("\n");
+}
+
 export function parseCSV(text: string): string[][] {
+  // lewati BOM dan baris penanda `sep=` dari file unduhan aplikasi
+  text = text.replace(/^\uFEFF/, "");
+  text = text.replace(/^sep=.?\r?\n/i, "");
   const rows: string[][] = [];
   let row: string[] = [];
   let field = "";

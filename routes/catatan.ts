@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { db } from "../db";
 import { requireRole } from "../auth";
-import { periodeAktif, parseCSV, csvField, nisExcel, normalisasiNIS, catatLog } from "../util";
+import { periodeAktif, parseCSV, csvField, nisExcel, normalisasiNIS, catatLog, bungkusCSV } from "../util";
 
 /**
  * Fase 2 — input catatan raport + kehadiran.
@@ -302,7 +302,7 @@ catatan.get("/wali/rekap", (c) => {
     "Content-Disposition",
     `attachment; filename="rekap-catatan-wali-${namaKelas(kelas_id)}.csv"`
   );
-  return c.body("\uFEFF" + lines.join("\n"));
+  return c.body(bungkusCSV(lines));
 });
 
 /* ================= TEMPLATE & IMPORT CSV ================= */
@@ -381,7 +381,7 @@ catatan.get("/:fitur/template", (c) => {
     "Content-Disposition",
     `attachment; filename="template-catatan-${key}-${namaKelas(kelas_id)}.csv"`
   );
-  return c.body("\uFEFF" + lines.join("\n"));
+  return c.body(bungkusCSV(lines));
 });
 
 /** Import CSV: cocokkan via nis dalam kelas yang dipilih. */

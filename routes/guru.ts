@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { db } from "../db";
 import { requireRole } from "../auth";
-import { parseCSV, csvField, periodeAktif, DEFAULT_RENTANG, nisExcel, normalisasiNIS, predikatUntuk, catatLog, namaMapelKelas } from "../util";
+import { parseCSV, csvField, periodeAktif, DEFAULT_RENTANG, nisExcel, normalisasiNIS, predikatUntuk, catatLog, namaMapelKelas, bungkusCSV } from "../util";
 
 const guru = new Hono();
 guru.use(requireRole("guru"));
@@ -221,7 +221,7 @@ guru.get("/nilai/template", (c) => {
     "Content-Disposition",
     `attachment; filename="template-nilai-${kelasNama}.csv"`
   );
-  return c.body("\uFEFF" + lines.join("\n"));
+  return c.body(bungkusCSV(lines));
 });
 
 /** Unduh rekap nilai per kelas x mapel (terisi nilai + predikat). */
@@ -259,7 +259,7 @@ guru.get("/nilai/rekap", (c) => {
   const namaFile = `rekap-nilai-${rows[0]?.mapel_kode ?? "mapel"}-${rows[0]?.kelas ?? "kelas"}.csv`;
   c.header("Content-Type", "text/csv; charset=utf-8");
   c.header("Content-Disposition", `attachment; filename="${namaFile}"`);
-  return c.body("\uFEFF" + lines.join("\n"));
+  return c.body(bungkusCSV(lines));
 });
 
 guru.post("/nilai/import", async (c) => {

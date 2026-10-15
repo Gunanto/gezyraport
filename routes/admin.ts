@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { db } from "../db";
 import { requireRole } from "../auth";
-import { parseCSV, csvField, validTanggalISO, nisExcel, normalisasiNIS, periodeAktif, catatLog } from "../util";
+import { parseCSV, csvField, validTanggalISO, nisExcel, normalisasiNIS, periodeAktif, catatLog, bungkusCSV } from "../util";
 import { existsSync, mkdirSync, unlinkSync } from "node:fs";
 
 const admin = new Hono();
@@ -403,7 +403,7 @@ admin.get("/siswa/export", (c) => {
     );
   c.header("Content-Type", "text/csv; charset=utf-8");
   c.header("Content-Disposition", 'attachment; filename="data-siswa.csv"');
-  return c.body("\uFEFF" + lines.join("\n"));
+  return c.body(bungkusCSV(lines));
 });
 
 admin.post("/siswa/import", async (c) => {
@@ -699,7 +699,7 @@ admin.get("/guru/template", (c) => {
   ];
   c.header("Content-Type", "text/csv; charset=utf-8");
   c.header("Content-Disposition", 'attachment; filename="template-guru.csv"');
-  return c.body("\uFEFF" + lines.join("\n"));
+  return c.body(bungkusCSV(lines));
 });
 
 admin.get("/guru/export", (c) => {
@@ -741,7 +741,7 @@ admin.get("/guru/export", (c) => {
     );
   c.header("Content-Type", "text/csv; charset=utf-8");
   c.header("Content-Disposition", 'attachment; filename="data-guru.csv"');
-  return c.body("\uFEFF" + lines.join("\n"));
+  return c.body(bungkusCSV(lines));
 });
 
 admin.post("/guru/import", async (c) => {

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { db } from "../db";
 import { requireRole } from "../auth";
-import { periodeAktif, predikatUntuk, csvField } from "../util";
+import { periodeAktif, predikatUntuk, csvField, bungkusCSV } from "../util";
 
 /**
  * Leger nilai per kelas — matriks nilai seluruh siswa satu kelas.
@@ -151,7 +151,7 @@ leger.get("/export", (c) => {
     "Content-Disposition",
     `attachment; filename="leger-${leg.kelas.nama}.csv"`
   );
-  return c.body("\uFEFF" + lines.join("\n"));
+  return c.body(bungkusCSV(lines));
 });
 
 export default leger;
