@@ -2,10 +2,10 @@ import { db } from "./db";
 
 /** Rentang predikat bawaan bila guru belum menetapkan rentang sendiri. */
 export const DEFAULT_RENTANG = [
-  { label: "Amat Baik / Pengayaan", min_nilai: 90, max_nilai: 100 },
+  { label: "Amat Baik", min_nilai: 90, max_nilai: 100 },
   { label: "Baik", min_nilai: 80, max_nilai: 89 },
-  { label: "Tercapai / Cukup", min_nilai: 70, max_nilai: 79 },
-  { label: "Kurang / Remedial", min_nilai: 0, max_nilai: 69 },
+  { label: "Cukup", min_nilai: 70, max_nilai: 79 },
+  { label: "Kurang", min_nilai: 0, max_nilai: 69 },
 ];
 
 /** Periode aktif (semester + tahun ajaran) dari desain_raport. */
