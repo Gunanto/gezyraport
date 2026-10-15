@@ -157,9 +157,9 @@ input:focus, select:focus, textarea:focus {
 .kop h2 { margin: 0; font-size: 1.35rem; letter-spacing: 1px; }
 .kop p { margin: 0.15rem 0; font-size: 0.9rem; }
 .judul-raport { text-align: center; margin: 1rem 0; }
-.judul-raport h3 { margin: 0; text-decoration: underline; font-size: 1.1rem; }
-table.identitas { width: 100%; border-collapse: collapse; margin-bottom: 1rem; font-size: 0.95rem; }
-table.identitas td { padding: 0.2rem 0.4rem; vertical-align: top; }
+.judul-raport h3 { margin: 0; font-size: 1.1rem; }
+table.identitas { width: 100%; border-collapse: collapse; margin-bottom: 0.5rem; font-size: 0.95rem; }
+table.identitas td { padding: 0.08rem 0.4rem; vertical-align: top; }
 table.nilai-cetak { width: 100%; border-collapse: collapse; font-size: 0.95rem; margin-bottom: 1rem; }
 table.nilai-cetak th, table.nilai-cetak td { border: 1px solid #000; padding: 0.4rem 0.5rem; }
 table.nilai-cetak th { background: #eee; }
