@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Catatan Wali Kelas — GezyRaport</title>
-<link rel="stylesheet" href="/css/style.css?v=20261015b">
+<link rel="stylesheet" href="/css/style.css?v=20261015c">
 </head>
 <body>
 <header class="topbar">
@@ -25,6 +25,7 @@
     <div class="toolbar">
       <button class="btn" id="btnMuat" type="button">Muat Daftar Siswa</button>
       <a class="btn green hidden" id="linkTemplate" href="#">⬇ Unduh Template CSV</a>
+      <a class="btn hidden" id="linkRekap" href="#">⬇ Unduh Rekap Catatan</a>
       <input type="file" id="fileCsv" accept=".csv" class="hidden">
       <button class="btn gold hidden" id="btnImport" type="button">⬆ Import CSV</button>
     </div>
@@ -44,7 +45,7 @@
     <div id="hasilSimpan"></div>
   </div>
 </main>
-<script src="/js/common.js?v=20261015b"></script>
+<script src="/js/common.js?v=20261015c"></script>
 <script>
 async function init(user) {
   let daftar = [];
@@ -82,6 +83,9 @@ async function muat() {
   const tpl = document.getElementById("linkTemplate");
   tpl.href = `/api/catatan/wali/template?kelas_id=${kelas_id}`;
   tpl.classList.remove("hidden");
+  const rkp = document.getElementById("linkRekap");
+  rkp.href = `/api/catatan/wali/rekap?kelas_id=${kelas_id}`;
+  rkp.classList.remove("hidden");
   document.getElementById("fileCsv").classList.remove("hidden");
   document.getElementById("btnImport").classList.remove("hidden");
   document.getElementById("panelCatatan").classList.remove("hidden");

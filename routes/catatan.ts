@@ -266,6 +266,42 @@ catatan.put("/ekskul", async (c) => {
   return c.json({ ok: true, tersimpan, gagal });
 });
 
+/** Unduh rekap catatan wali + kehadiran per kelas (khusus wali kelas ybs). */
+catatan.get("/wali/rekap", (c) => {
+  const gi = infoGuru(c);
+  const kelas_id = c.req.query("kelas_id");
+  if (!kelas_id || !kelasAda(kelas_id))
+    return c.json({ error: "kelas_id tidak valid" }, 400);
+  if (gi && !isWali(gi.gid, kelas_id))
+    return c.json({ error: "Anda bukan wali kelas ini" }, 403);
+  const rows = siswaDenganCatatan(kelas_id, [
+    "catatan_wali",
+    "sakit",
+    "izin",
+    "alpa",
+  ]) as any[];
+  const lines = ["nis,nama,catatan_wali,sakit,izin,alpa"];
+  for (const r of rows)
+    lines.push(
+      [
+        nisExcel(r.nis),
+        r.nama,
+        r.catatan_wali ?? "",
+        r.sakit ?? 0,
+        r.izin ?? 0,
+        r.alpa ?? 0,
+      ]
+        .map(csvField)
+        .join(",")
+    );
+  c.header("Content-Type", "text/csv; charset=utf-8");
+  c.header(
+    "Content-Disposition",
+    `attachment; filename="rekap-catatan-wali-${namaKelas(kelas_id)}.csv"`
+  );
+  return c.body("\uFEFF" + lines.join("\n"));
+});
+
 /* ================= TEMPLATE & IMPORT CSV ================= */
 /* Kolom nis & nama hanya referensi baca manusia; pencocokan via nis.
    Hanya kolom milik fitur itu yang diupdate; kolom lain tidak tersentuh.

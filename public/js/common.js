@@ -11,6 +11,7 @@ const NAVS = {
     ["Desain Raport", "/desain.html"],
     ["Leger Nilai", "/leger.html"],
     ["Cetak per Kelas", "/cetak-kelas.html"],
+    ["Backup", "/backup.html"],
   ],
   siswa: [
     ["Beranda", "/"],

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { db } from "../db";
 import { requireRole } from "../auth";
-import { parseCSV, csvField, validTanggalISO, nisExcel, normalisasiNIS } from "../util";
+import { parseCSV, csvField, validTanggalISO, nisExcel, normalisasiNIS, periodeAktif } from "../util";
 import { existsSync, mkdirSync, unlinkSync } from "node:fs";
 
 const admin = new Hono();
@@ -1128,6 +1128,352 @@ admin.delete("/desain/kop", (c) => {
   hapusKopLama();
   db.query("UPDATE desain_raport SET kop_path = NULL WHERE id = 1").run();
   return c.json({ ok: true });
+});
+
+/* ================= BACKUP & RESTORE ================= */
+
+const BAGIAN_BACKUP = [
+  "pengguna",
+  "siswa",
+  "kelas",
+  "mapel",
+  "penugasan",
+  "rentang",
+  "nilai",
+  "catatan",
+  "desain",
+] as const;
+
+const LABEL_BAGIAN: Record<string, string> = {
+  pengguna: "Pengguna & Guru",
+  siswa: "Siswa",
+  kelas: "Kelas",
+  mapel: "Mata Pelajaran",
+  penugasan: "Penugasan Mengajar & BK",
+  rentang: "Rentang Predikat",
+  nilai: "Nilai",
+  catatan: "Catatan & Kehadiran",
+  desain: "Desain Raport",
+};
+
+/** Ambil isi satu bagian untuk file backup. */
+function ambilBagian(nama: string): any {
+  switch (nama) {
+    case "pengguna":
+      return {
+        users: db
+          .query(
+            "SELECT id, username, password_hash, role, created_at FROM users ORDER BY id"
+          )
+          .all(),
+        guru: db
+          .query(
+            "SELECT id, user_id, nama, nip, is_bk, is_ekskul, is_staf FROM guru ORDER BY id"
+          )
+          .all(),
+      };
+    case "siswa":
+      return db
+        .query(
+          "SELECT id, user_id, nis, nama, kelas_id, agama, jenis_kelamin FROM siswa ORDER BY id"
+        )
+        .all();
+    case "kelas":
+      return db
+        .query(
+          "SELECT id, nama, tingkat, wali_guru_id, tahun_ajaran, semester FROM kelas ORDER BY id"
+        )
+        .all();
+    case "mapel":
+      return db
+        .query(
+          "SELECT id, nama, kode, urutan, aktif FROM mapel ORDER BY urutan, id"
+        )
+        .all();
+    case "penugasan":
+      return {
+        guru_mapel: db
+          .query("SELECT guru_id, mapel_id, kelas_id FROM guru_mapel")
+          .all(),
+        bk_kelas: db.query("SELECT guru_id, kelas_id FROM bk_kelas").all(),
+      };
+    case "rentang":
+      return db
+        .query(
+          "SELECT id, mapel_id, guru_id, label, min_nilai, max_nilai FROM rentang_nilai ORDER BY id"
+        )
+        .all();
+    case "nilai":
+      return db
+        .query(
+          "SELECT siswa_id, mapel_id, tahun_ajaran, semester, nilai_angka, updated_by, updated_at FROM nilai"
+        )
+        .all();
+    case "catatan":
+      return db
+        .query(
+          `SELECT siswa_id, tahun_ajaran, semester, catatan_bk, catatan_wali,
+                  catatan_ekskul, catatan_guru, sakit, izin, alpa
+           FROM catatan_raport`
+        )
+        .all();
+    case "desain":
+      return db.query("SELECT * FROM desain_raport WHERE id = 1").get();
+    default:
+      return null;
+  }
+}
+
+/** Sinkronkan sqlite_sequence setelah restore ber-id eksplisit. */
+function perbaikiSequence(tabel: string) {
+  const r = db.query(`SELECT MAX(id) AS m FROM ${tabel}`).get() as any;
+  db.query("DELETE FROM sqlite_sequence WHERE name = ?").run(tabel);
+  if (r && r.m)
+    db.query("INSERT INTO sqlite_sequence (name, seq) VALUES (?, ?)").run(tabel, r.m);
+}
+
+/** Tulis ulang satu bagian dari data backup (REPLACE, bukan gabung).
+ *  Mengembalikan jumlah baris utama yang dipulihkan. */
+const BAGIAN_ARRAY = new Set([
+  "siswa",
+  "kelas",
+  "mapel",
+  "rentang",
+  "nilai",
+  "catatan",
+]);
+
+function tulisBagian(nama: string, data: any): number {
+  // array kosong valid: artinya pulihkan menjadi kosong
+  if (BAGIAN_ARRAY.has(nama) && !Array.isArray(data))
+    throw new Error(`Data bagian "${LABEL_BAGIAN[nama] ?? nama}" tidak valid`);
+  let n = 0;
+  switch (nama) {
+    case "pengguna": {
+      if (!Array.isArray(data.users) || !Array.isArray(data.guru))
+        throw new Error('Bagian "Pengguna & Guru" tidak valid');
+      db.exec("DELETE FROM guru");
+      db.exec("DELETE FROM users");
+      const iu = db.prepare(
+        "INSERT INTO users (id, username, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?)"
+      );
+      for (const u of data.users) {
+        iu.run(u.id, u.username, u.password_hash, u.role, u.created_at ?? null);
+        n++;
+      }
+      const ig = db.prepare(
+        "INSERT INTO guru (id, user_id, nama, nip, is_bk, is_ekskul, is_staf) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      );
+      for (const g of data.guru)
+        ig.run(g.id, g.user_id, g.nama, g.nip ?? null, g.is_bk ?? 0, g.is_ekskul ?? 0, g.is_staf ?? 0);
+      perbaikiSequence("users");
+      perbaikiSequence("guru");
+      break;
+    }
+    case "siswa": {
+      db.exec("DELETE FROM siswa");
+      const q = db.prepare(
+        "INSERT INTO siswa (id, user_id, nis, nama, kelas_id, agama, jenis_kelamin) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      );
+      for (const r of data) {
+        q.run(r.id, r.user_id ?? null, r.nis, r.nama, r.kelas_id, r.agama ?? null, r.jenis_kelamin ?? null);
+        n++;
+      }
+      perbaikiSequence("siswa");
+      break;
+    }
+    case "kelas": {
+      db.exec("DELETE FROM kelas");
+      const q = db.prepare(
+        "INSERT INTO kelas (id, nama, tingkat, wali_guru_id, tahun_ajaran, semester) VALUES (?, ?, ?, ?, ?, ?)"
+      );
+      for (const r of data) {
+        q.run(r.id, r.nama, r.tingkat ?? null, r.wali_guru_id ?? null, r.tahun_ajaran ?? null, r.semester ?? null);
+        n++;
+      }
+      perbaikiSequence("kelas");
+      break;
+    }
+    case "mapel": {
+      db.exec("DELETE FROM mapel");
+      const q = db.prepare(
+        "INSERT INTO mapel (id, nama, kode, urutan, aktif) VALUES (?, ?, ?, ?, ?)"
+      );
+      for (const r of data) {
+        q.run(r.id, r.nama, r.kode, r.urutan ?? null, r.aktif ?? 1);
+        n++;
+      }
+      perbaikiSequence("mapel");
+      break;
+    }
+    case "penugasan": {
+      if (!Array.isArray(data.guru_mapel) || !Array.isArray(data.bk_kelas))
+        throw new Error('Bagian "Penugasan" tidak valid');
+      db.exec("DELETE FROM guru_mapel");
+      db.exec("DELETE FROM bk_kelas");
+      const q1 = db.prepare("INSERT INTO guru_mapel (guru_id, mapel_id, kelas_id) VALUES (?, ?, ?)");
+      for (const r of data.guru_mapel) {
+        q1.run(r.guru_id, r.mapel_id, r.kelas_id);
+        n++;
+      }
+      const q2 = db.prepare("INSERT INTO bk_kelas (guru_id, kelas_id) VALUES (?, ?)");
+      for (const r of data.bk_kelas) q2.run(r.guru_id, r.kelas_id);
+      break;
+    }
+    case "rentang": {
+      db.exec("DELETE FROM rentang_nilai");
+      const q = db.prepare(
+        "INSERT INTO rentang_nilai (id, mapel_id, guru_id, label, min_nilai, max_nilai) VALUES (?, ?, ?, ?, ?, ?)"
+      );
+      for (const r of data) {
+        q.run(r.id, r.mapel_id, r.guru_id, r.label, r.min_nilai, r.max_nilai);
+        n++;
+      }
+      perbaikiSequence("rentang_nilai");
+      break;
+    }
+    case "nilai": {
+      db.exec("DELETE FROM nilai");
+      const q = db.prepare(
+        `INSERT INTO nilai (siswa_id, mapel_id, tahun_ajaran, semester, nilai_angka, updated_by, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      );
+      for (const r of data) {
+        q.run(r.siswa_id, r.mapel_id, r.tahun_ajaran, r.semester, r.nilai_angka, r.updated_by ?? null, r.updated_at ?? null);
+        n++;
+      }
+      break;
+    }
+    case "catatan": {
+      db.exec("DELETE FROM catatan_raport");
+      const q = db.prepare(
+        `INSERT INTO catatan_raport (siswa_id, tahun_ajaran, semester, catatan_bk, catatan_wali,
+          catatan_ekskul, catatan_guru, sakit, izin, alpa)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      );
+      for (const r of data) {
+        q.run(
+          r.siswa_id, r.tahun_ajaran, r.semester,
+          r.catatan_bk ?? null, r.catatan_wali ?? null, r.catatan_ekskul ?? null,
+          r.catatan_guru ?? null, r.sakit ?? 0, r.izin ?? 0, r.alpa ?? 0
+        );
+        n++;
+      }
+      break;
+    }
+    case "desain": {
+      if (!data || typeof data !== "object")
+        throw new Error('Bagian "Desain Raport" tidak valid');
+      db.exec("DELETE FROM desain_raport");
+      const q = db.prepare(
+        `INSERT INTO desain_raport (id, kop_path, nama_sekolah, alamat_sekolah, kepala_nama,
+          kepala_nip, kota, semester_aktif, tahun_ajaran_aktif)
+         VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)`
+      );
+      q.run(
+        data.kop_path ?? null, data.nama_sekolah ?? null, data.alamat_sekolah ?? null,
+        data.kepala_nama ?? null, data.kepala_nip ?? null, data.kota ?? null,
+        data.semester_aktif ?? null, data.tahun_ajaran_aktif ?? null
+      );
+      n = 1;
+      break;
+    }
+    default:
+      throw new Error(`Bagian tidak dikenal: ${nama}`);
+  }
+  return n;
+}
+
+/** Urutan restore yang aman terhadap relasi antar tabel. */
+const URUTAN_RESTORE = [
+  "desain",
+  "mapel",
+  "kelas",
+  "pengguna",
+  "siswa",
+  "penugasan",
+  "rentang",
+  "nilai",
+  "catatan",
+];
+
+/** Info jumlah baris per bagian (untuk halaman Backup). */
+admin.get("/backup/info", (c) => {
+  const hitung = (sql: string) => (db.query(sql).get() as any).n as number;
+  return c.json({
+    periode: periodeAktif(),
+    bagian: BAGIAN_BACKUP.map((b) => ({ id: b, label: LABEL_BAGIAN[b] })),
+    jumlah: {
+      pengguna: hitung("SELECT COUNT(*) n FROM users"),
+      siswa: hitung("SELECT COUNT(*) n FROM siswa"),
+      kelas: hitung("SELECT COUNT(*) n FROM kelas"),
+      mapel: hitung("SELECT COUNT(*) n FROM mapel"),
+      penugasan:
+        hitung("SELECT COUNT(*) n FROM guru_mapel") +
+        hitung("SELECT COUNT(*) n FROM bk_kelas"),
+      rentang: hitung("SELECT COUNT(*) n FROM rentang_nilai"),
+      nilai: hitung("SELECT COUNT(*) n FROM nilai"),
+      catatan: hitung("SELECT COUNT(*) n FROM catatan_raport"),
+      desain: hitung("SELECT COUNT(*) n FROM desain_raport"),
+    },
+  });
+});
+
+/** Unduh file backup JSON. Query: ?bagian=pengguna,siswa,... (default: semua). */
+admin.get("/backup", (c) => {
+  const diminta = (c.req.query("bagian") || "")
+    .split(",")
+    .map((x) => x.trim())
+    .filter((x) => (BAGIAN_BACKUP as readonly string[]).includes(x));
+  const daftar = diminta.length ? diminta : [...BAGIAN_BACKUP];
+  const bagian: Record<string, any> = {};
+  for (const b of daftar) bagian[b] = ambilBagian(b);
+  const tgl = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  c.header("Content-Type", "application/json; charset=utf-8");
+  c.header(
+    "Content-Disposition",
+    `attachment; filename="backup-gezyraport-${tgl}.json"`
+  );
+  return c.body(
+    JSON.stringify(
+      {
+        gezyraport_backup: true,
+        version: 1,
+        dibuat: new Date().toISOString(),
+        periode: periodeAktif(),
+        bagian,
+      },
+      null,
+      1
+    )
+  );
+});
+
+/** Restore dari file backup: REPLACE per bagian (atomic via transaksi). */
+admin.post("/backup/restore", async (c) => {
+  let body: any;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Body bukan JSON yang valid" }, 400);
+  }
+  if (!body?.gezyraport_backup || body.version !== 1 || !body.bagian)
+    return c.json({ error: "File backup tidak valid" }, 400);
+  const hasil: Record<string, number> = {};
+  try {
+    const jalan = db.transaction(() => {
+      for (const b of URUTAN_RESTORE) {
+        if (!(b in body.bagian)) continue;
+        hasil[b] = tulisBagian(b, body.bagian[b]);
+      }
+    });
+    jalan();
+  } catch (e: any) {
+    return c.json({ error: `Restore gagal: ${e.message}` }, 400);
+  }
+  if (!Object.keys(hasil).length)
+    return c.json({ error: "Tidak ada bagian yang cocok untuk direstore" }, 400);
+  return c.json({ ok: true, hasil });
 });
 
 export default admin;

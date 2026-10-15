@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { db } from "../db";
 import { requireRole } from "../auth";
-import { parseCSV, csvField, periodeAktif, DEFAULT_RENTANG, nisExcel, normalisasiNIS } from "../util";
+import { parseCSV, csvField, periodeAktif, DEFAULT_RENTANG, nisExcel, normalisasiNIS, predikatUntuk } from "../util";
 
 const guru = new Hono();
 guru.use(requireRole("guru"));
@@ -219,6 +219,44 @@ guru.get("/nilai/template", (c) => {
     "Content-Disposition",
     `attachment; filename="template-nilai-${kelasNama}.csv"`
   );
+  return c.body("\uFEFF" + lines.join("\n"));
+});
+
+/** Unduh rekap nilai per kelas x mapel (terisi nilai + predikat). */
+guru.get("/nilai/rekap", (c) => {
+  const gid = guruId(c);
+  if (!gid) return c.json({ error: "Data guru tidak ditemukan" }, 404);
+  const kelas_id = c.req.query("kelas_id");
+  const mapel_id = c.req.query("mapel_id");
+  if (!kelas_id || !mapel_id)
+    return c.json({ error: "kelas_id dan mapel_id wajib diisi" }, 400);
+  if (!cekAjar(gid, mapel_id, kelas_id))
+    return c.json({ error: "Anda tidak mengajar mapel ini di kelas ini" }, 403);
+  const p = periodeAktif();
+  const rows = db
+    .query(
+      `SELECT s.nis, s.nama, k.nama AS kelas, m.kode AS mapel_kode, n.nilai_angka
+       FROM siswa s
+       JOIN kelas k ON k.id = s.kelas_id
+       JOIN mapel m ON m.id = ?
+       LEFT JOIN nilai n ON n.siswa_id = s.id AND n.mapel_id = ?
+         AND n.tahun_ajaran = ? AND n.semester = ?
+       WHERE s.kelas_id = ? ORDER BY s.nama`
+    )
+    .all(mapel_id, mapel_id, p.tahun_ajaran, p.semester, kelas_id) as any[];
+  const lines = ["nis,nama,kelas,nilai,predikat"];
+  for (const r of rows) {
+    const predikat =
+      predikatUntuk(Number(mapel_id), Number(kelas_id), r.nilai_angka) ?? "";
+    lines.push(
+      [nisExcel(r.nis), r.nama, r.kelas, r.nilai_angka ?? "", predikat]
+        .map(csvField)
+        .join(",")
+    );
+  }
+  const namaFile = `rekap-nilai-${rows[0]?.mapel_kode ?? "mapel"}-${rows[0]?.kelas ?? "kelas"}.csv`;
+  c.header("Content-Type", "text/csv; charset=utf-8");
+  c.header("Content-Disposition", `attachment; filename="${namaFile}"`);
   return c.body("\uFEFF" + lines.join("\n"));
 });
 

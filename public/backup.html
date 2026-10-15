@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Backup &amp; Restore — GezyRaport</title>
+<link rel="stylesheet" href="/css/style.css?v=20261015c">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">🎓 GezyRaport <small>SMPN 1 Punggur</small></div>
+  <nav id="nav"></nav>
+  <div class="spacer"></div>
+  <span class="userinfo" id="userInfo"></span>
+  <button class="btn small" id="btnLogout">Keluar</button>
+</header>
+<main class="container">
+  <div class="card">
+    <h2>💾 Backup Data</h2>
+    <p class="muted">Centang bagian yang ingin dicadangkan, lalu unduh sebagai satu file <code>.json</code>. Simpan file ini di tempat aman — bisa dipakai untuk memulihkan data bila aplikasi bermasalah.</p>
+    <div id="msgDown" class="alert hidden"></div>
+    <div id="daftarBagian"></div>
+    <div class="toolbar" style="margin-top:1rem">
+      <button class="btn green" id="btnUnduh" type="button">⬇ Unduh Backup</button>
+    </div>
+  </div>
+  <div class="card">
+    <h2>↩ Restore Data</h2>
+    <p class="muted">Upload file backup <code>.json</code> untuk memulihkan data. <b>Perhatian:</b> data pada bagian yang direstore akan <b>diganti total</b> dengan isi file backup (bukan digabung). Lakukan backup kondisi saat ini dulu bila ragu.</p>
+    <div id="msgUp" class="alert hidden"></div>
+    <div class="form-grid">
+      <label class="field">File Backup <input type="file" id="fileBackup" accept=".json,application/json"></label>
+    </div>
+    <div id="infoRestore" class="muted" style="margin:0.6rem 0"></div>
+    <div class="toolbar">
+      <button class="btn red hidden" id="btnRestore" type="button">↩ Restore Sekarang</button>
+    </div>
+  </div>
+</main>
+<script src="/js/common.js?v=20261015c"></script>
+<script>
+let infoBackup = null;
+let fileData = null;
+
+function renderBagian() {
+  const wrap = document.getElementById("daftarBagian");
+  wrap.innerHTML = infoBackup.bagian.map((b) => {
+    const jml = infoBackup.jumlah[b.id] ?? 0;
+    return `<label class="field" style="display:flex;align-items:center;gap:0.6rem;cursor:pointer">
+      <input type="checkbox" data-bagian="${b.id}" checked style="width:1.1rem;height:1.1rem">
+      <span><b>${esc(b.label)}</b> <span class="muted">(${jml} baris)</span></span>
+    </label>`;
+  }).join("");
+}
+
+function bagianTerpilih() {
+  return [...document.querySelectorAll("[data-bagian]:checked")].map((el) => el.dataset.bagian);
+}
+
+(async () => {
+  const user = await requireLogin(["admin"]);
+  if (!user) return;
+  const r = await api("/api/admin/backup/info");
+  if (!r.ok) {
+    showMsg("msgDown", (r.data && r.data.error) || "Gagal memuat info backup", "error");
+    return;
+  }
+  infoBackup = r.data;
+  const p = infoBackup.periode;
+  document.querySelector("main .card p.muted").insertAdjacentHTML(
+    "beforeend",
+    ` <span class="muted">Periode aktif: <b>${esc(p.semester)} ${esc(p.tahun_ajaran)}</b>.</span>`
+  );
+  renderBagian();
+
+  document.getElementById("btnUnduh").addEventListener("click", () => {
+    hideMsg("msgDown");
+    const daftar = bagianTerpilih();
+    if (!daftar.length) {
+      showMsg("msgDown", "Pilih minimal satu bagian untuk dibackup.", "error");
+      return;
+    }
+    window.location.href = "/api/admin/backup?bagian=" + daftar.join(",");
+    showMsg("msgDown", "File backup mulai diunduh.", "ok");
+  });
+
+  document.getElementById("fileBackup").addEventListener("change", (e) => {
+    hideMsg("msgUp");
+    fileData = null;
+    document.getElementById("btnRestore").classList.add("hidden");
+    document.getElementById("infoRestore").textContent = "";
+    const f = e.target.files[0];
+    if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => {
+      try {
+        const j = JSON.parse(rd.result);
+        if (!j.gezyraport_backup || j.version !== 1 || !j.bagian)
+          throw new Error("format salah");
+        fileData = j;
+        const daftar = Object.keys(j.bagian);
+        document.getElementById("infoRestore").innerHTML =
+          `File valid — dibuat <b>${esc(j.dibuat || "-")}</b>, berisi bagian: <b>${daftar.map(esc).join(", ")}</b>.`;
+        document.getElementById("btnRestore").classList.remove("hidden");
+      } catch {
+        showMsg("msgUp", "File bukan backup GezyRaport yang valid.", "error");
+      }
+    };
+    rd.readAsText(f);
+  });
+
+  document.getElementById("btnRestore").addEventListener("click", async () => {
+    if (!fileData) return;
+    hideMsg("msgUp");
+    const daftar = Object.keys(fileData.bagian).join(", ");
+    if (!confirm(`Restore akan MENGGANTI TOTAL data bagian: ${daftar}.\n\nLanjutkan?`)) return;
+    if (!confirm("Yakin? Data saat ini pada bagian tersebut akan hilang dan diganti isi backup.")) return;
+    const r2 = await api("/api/admin/backup/restore", {
+      method: "POST",
+      body: JSON.stringify(fileData),
+    });
+    if (r2.ok) {
+      const hasil = Object.entries(r2.data.hasil)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join(", ");
+      showMsg("msgUp", `Restore berhasil. ${hasil}`, "ok");
+      const r3 = await api("/api/admin/backup/info");
+      if (r3.ok) { infoBackup = r3.data; renderBagian(); }
+    } else {
+      showMsg("msgUp", (r2.data && r2.data.error) || "Restore gagal", "error");
+    }
+  });
+})();
+</script>
+</body>
+</html>

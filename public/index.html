@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Beranda — GezyRaport</title>
-<link rel="stylesheet" href="/css/style.css?v=20261015b">
+<link rel="stylesheet" href="/css/style.css?v=20261015c">
 </head>
 <body>
 <header class="topbar">
@@ -25,7 +25,7 @@
   </div>
   <div class="menu-grid" id="menuGrid"></div>
 </main>
-<script src="/js/common.js?v=20261015b"></script>
+<script src="/js/common.js?v=20261015c"></script>
 <script>
 const MENU_DETAIL = {
   "/users.html": ["👥", "Pengguna", "Kelola akun admin, guru, dan siswa/ortu."],
@@ -42,6 +42,7 @@ const MENU_DETAIL = {
   "/ekskul.html": ["⚽", "Catatan Ekskul", "Catatan ekstrakurikuler per siswa."],
   "/leger.html": ["📊", "Leger Nilai", "Rekap nilai per kelas (staf & wali kelas)."],
   "/cetak-kelas.html": ["🖨️", "Cetak per Kelas", "Cetak raport sekelas sekaligus (admin & wali kelas)."],
+  "/backup.html": ["💾", "Backup & Restore", "Cadangkan dan pulihkan data per bagian."],
 };
 (async () => {
   const user = await requireLogin();
