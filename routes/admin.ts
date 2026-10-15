@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { db } from "../db";
 import { requireRole } from "../auth";
-import { parseCSV, csvField, validTanggalISO, nisExcel, normalisasiNIS, periodeAktif } from "../util";
+import { parseCSV, csvField, validTanggalISO, nisExcel, normalisasiNIS, periodeAktif, catatLog } from "../util";
 import { existsSync, mkdirSync, unlinkSync } from "node:fs";
 
 const admin = new Hono();
@@ -64,6 +64,7 @@ admin.post("/users", async (c) => {
       }
       db.query("UPDATE siswa SET user_id = ? WHERE id = ?").run(uid, siswa_id);
     }
+    catatLog(c, "tambah_pengguna", `username: ${username} (${role})`);
     return c.json({ ok: true, id: uid });
   } catch {
     return c.json({ error: "Username sudah dipakai" }, 400);
@@ -94,6 +95,7 @@ admin.put("/users/:id", async (c) => {
         "UPDATE guru SET nama = COALESCE(?, nama), nip = COALESCE(?, nip) WHERE id = ?"
       ).run(nama ?? null, nip ?? null, g.id);
   }
+  catatLog(c, "ubah_pengguna", `id ${id}`);
   return c.json({ ok: true });
 });
 
@@ -116,6 +118,7 @@ admin.delete("/users/:id", (c) => {
   db.query("UPDATE siswa SET user_id = NULL WHERE user_id = ?").run(id);
   db.query("DELETE FROM sessions WHERE user_id = ?").run(id);
   db.query("DELETE FROM users WHERE id = ?").run(id);
+  catatLog(c, "hapus_pengguna", `id ${id}`);
   return c.json({ ok: true });
 });
 
@@ -139,6 +142,7 @@ admin.post("/mapel", async (c) => {
     const r = db
       .query("INSERT INTO mapel (nama, kode, urutan, aktif) VALUES (?,?,?,?)")
       .run(nama, String(kode).toUpperCase().trim(), urutan ?? maxU + 1, aktif ?? 1);
+    catatLog(c, "tambah_mapel", `${nama} (${kode})`);
     return c.json({ ok: true, id: Number(r.lastInsertRowid) });
   } catch {
     return c.json({ error: "Kode mapel sudah dipakai" }, 400);
@@ -164,6 +168,7 @@ admin.put("/mapel/:id", async (c) => {
   } catch {
     return c.json({ error: "Kode mapel sudah dipakai" }, 400);
   }
+  catatLog(c, "ubah_mapel", `id ${id}`);
   return c.json({ ok: true });
 });
 
@@ -187,6 +192,7 @@ admin.delete("/mapel/:id", (c) => {
       400
     );
   db.query("DELETE FROM mapel WHERE id = ?").run(id);
+  catatLog(c, "hapus_mapel", `id ${id}`);
   return c.json({ ok: true });
 });
 
@@ -219,6 +225,7 @@ admin.post("/kelas", async (c) => {
       tahun_ajaran || null,
       semester || null
     );
+  catatLog(c, "tambah_kelas", `${nama}`);
   return c.json({ ok: true, id: Number(r.lastInsertRowid) });
 });
 
@@ -240,6 +247,7 @@ admin.put("/kelas/:id", async (c) => {
     semester ?? null,
     id
   );
+  catatLog(c, "ubah_kelas", `id ${id}`);
   return c.json({ ok: true });
 });
 
@@ -255,6 +263,7 @@ admin.delete("/kelas/:id", (c) => {
     );
   db.query("DELETE FROM guru_mapel WHERE kelas_id = ?").run(id);
   db.query("DELETE FROM kelas WHERE id = ?").run(id);
+  catatLog(c, "hapus_kelas", `id ${id}`);
   return c.json({ ok: true });
 });
 
@@ -310,6 +319,7 @@ admin.post("/siswa", async (c) => {
         "INSERT INTO siswa (user_id, nis, nama, kelas_id, agama, jenis_kelamin) VALUES (?,?,?,?,?,?)"
       )
       .run(uid, String(nis).trim(), nama, kelas_id || null, agama || null, jk);
+    catatLog(c, "tambah_siswa", `${nama} (${nis})`);
     return c.json({
       ok: true,
       id: Number(sr.lastInsertRowid),
@@ -355,6 +365,7 @@ admin.put("/siswa/:id", async (c) => {
   } catch {
     return c.json({ error: "NIS sudah dipakai" }, 400);
   }
+  catatLog(c, "ubah_siswa", `id ${id}`);
   return c.json({ ok: true });
 });
 
@@ -373,6 +384,7 @@ admin.delete("/siswa/:id", (c) => {
     void u;
   }
   db.query("DELETE FROM siswa WHERE id = ?").run(id);
+  catatLog(c, "hapus_siswa", `${sw.nama} (${sw.nis})`);
   return c.json({ ok: true });
 });
 
@@ -482,6 +494,7 @@ admin.post("/siswa/import", async (c) => {
       );
     }
   }
+  catatLog(c, "import_siswa", `${sukses} baris (baru ${dibuat}, update ${diupdate})`);
   return c.json({ ok: true, sukses, dibuat, diupdate, diabaikan, gagal });
 });
 
@@ -543,6 +556,7 @@ admin.post("/guru", async (c) => {
         is_staf ? 1 : 0,
         is_staf ? String(jabatan).trim() : null
       );
+    catatLog(c, "tambah_guru", `${nama} (${username})`);
     return c.json({ ok: true, id: Number(gr.lastInsertRowid) });
   } catch {
     return c.json({ error: "Username sudah dipakai" }, 400);
@@ -573,6 +587,7 @@ admin.put("/guru/:id", async (c) => {
     jabatanAkhir,
     id
   );
+  catatLog(c, "ubah_guru", `id ${id}`);
   return c.json({ ok: true });
 });
 
@@ -588,6 +603,7 @@ admin.delete("/guru/:id", (c) => {
     db.query("DELETE FROM users WHERE id = ?").run(g.user_id);
   }
   db.query("DELETE FROM guru WHERE id = ?").run(id);
+  catatLog(c, "hapus_guru", `${g.nama}`);
   return c.json({ ok: true });
 });
 
@@ -627,6 +643,7 @@ admin.put("/guru/:id/ajar", async (c) => {
     for (const d of daftar) ins.run(id, d.mapel_id, d.kelas_id);
   });
   ganti();
+  catatLog(c, "ubah_penugasan", `${daftar.length} penugasan`);
   return c.json({ ok: true, jumlah: daftar.length });
 });
 
@@ -1014,6 +1031,7 @@ admin.post("/guru/import", async (c) => {
       );
     }
   }
+  catatLog(c, "import_guru", `${sukses} baris (baru ${dibuat}, update ${diupdate})`);
   return c.json({ ok: true, sukses, dibuat, diupdate, diabaikan, gagal });
 });
 
@@ -1085,6 +1103,7 @@ admin.put("/desain", async (c) => {
   db.query(`UPDATE desain_raport SET ${sets.join(", ")} WHERE id = 1`).run(
     ...params
   );
+  catatLog(c, "ubah_desain", "pengaturan raport");
   return c.json({ ok: true });
 });
 
@@ -1120,6 +1139,7 @@ admin.post("/desain/kop", async (c) => {
   await Bun.write(`${KOP_DIR}/${nama}`, f);
   const kop_path = `/uploads/${nama}`;
   db.query("UPDATE desain_raport SET kop_path = ? WHERE id = 1").run(kop_path);
+  catatLog(c, "unggah_kop", kop_path);
   return c.json({ ok: true, kop_path });
 });
 
@@ -1127,6 +1147,7 @@ admin.post("/desain/kop", async (c) => {
 admin.delete("/desain/kop", (c) => {
   hapusKopLama();
   db.query("UPDATE desain_raport SET kop_path = NULL WHERE id = 1").run();
+  catatLog(c, "hapus_kop", undefined);
   return c.json({ ok: true });
 });
 
@@ -1434,6 +1455,7 @@ admin.get("/backup", (c) => {
     "Content-Disposition",
     `attachment; filename="backup-gezyraport-${tgl}.json"`
   );
+  catatLog(c, "unduh_backup", `bagian: ${daftar.join(", ")}`);
   return c.body(
     JSON.stringify(
       {
@@ -1473,7 +1495,69 @@ admin.post("/backup/restore", async (c) => {
   }
   if (!Object.keys(hasil).length)
     return c.json({ error: "Tidak ada bagian yang cocok untuk direstore" }, 400);
+  catatLog(c, "restore_backup", `bagian: ${Object.keys(hasil).join(", ")}`);
   return c.json({ ok: true, hasil });
+});
+
+/* ================= LOG AKTIVITAS ================= */
+
+/** Daftar log: filter ?q= ?aksi= ?dari=YYYY-MM-DD ?sampai=YYYY-MM-DD ?page= ?per= */
+admin.get("/log", (c) => {
+  const q = (c.req.query("q") || "").trim();
+  const aksi = (c.req.query("aksi") || "").trim();
+  const dari = (c.req.query("dari") || "").trim();
+  const sampai = (c.req.query("sampai") || "").trim();
+  const page = Math.max(1, Number(c.req.query("page")) || 1);
+  const per = Math.min(100, Math.max(10, Number(c.req.query("per")) || 25));
+  const where: string[] = [];
+  const params: any[] = [];
+  if (q) {
+    where.push("(username LIKE ? OR detail LIKE ? OR aksi LIKE ?)");
+    params.push(`%${q}%`, `%${q}%`, `%${q}%`);
+  }
+  if (aksi) {
+    where.push("aksi = ?");
+    params.push(aksi);
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dari)) {
+    where.push("waktu >= ?");
+    params.push(dari + "T00:00:00");
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(sampai)) {
+    where.push("waktu <= ?");
+    params.push(sampai + "T23:59:59");
+  }
+  const w = where.length ? "WHERE " + where.join(" AND ") : "";
+  const total = (
+    db.query(`SELECT COUNT(*) AS n FROM activity_log ${w}`).get(...params) as any
+  ).n as number;
+  const rows = db
+    .query(
+      `SELECT id, waktu, username, peran, aksi, detail, ip
+       FROM activity_log ${w} ORDER BY id DESC LIMIT ? OFFSET ?`
+    )
+    .all(...params, per, (page - 1) * per);
+  const daftarAksi = (
+    db.query("SELECT DISTINCT aksi FROM activity_log ORDER BY aksi").all() as any[]
+  ).map((r) => r.aksi);
+  return c.json({ log: rows, total, page, per, daftarAksi });
+});
+
+/** Hapus log yang lebih lama dari N hari (minimal 30). */
+admin.delete("/log/lama", async (c) => {
+  let n = 0;
+  try {
+    n = Number((await c.req.json()).hari);
+  } catch {
+    return c.json({ error: "Body tidak valid" }, 400);
+  }
+  if (!Number.isInteger(n) || n < 30)
+    return c.json({ error: "Minimal 30 hari" }, 400);
+  const batas = new Date(Date.now() - n * 86400000).toISOString();
+  const r = db.query("DELETE FROM activity_log WHERE waktu < ?").run(batas);
+  const terhapus = Number(r.changes);
+  catatLog(c, "hapus_log", `${terhapus} baris (> ${n} hari)`);
+  return c.json({ ok: true, terhapus });
 });
 
 export default admin;

@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Log Aktivitas — GezyRaport</title>
+<link rel="stylesheet" href="/css/style.css?v=20261015d">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">🎓 GezyRaport <small>SMPN 1 Punggur</small></div>
+  <nav id="nav"></nav>
+  <div class="spacer"></div>
+  <span class="userinfo" id="userInfo"></span>
+  <button class="btn small" id="btnLogout">Keluar</button>
+</header>
+<main class="container">
+  <div class="card">
+    <h2>📋 Log Aktivitas</h2>
+    <p class="muted">Rekam jejak aksi penting: login, simpan/ubah/hapus data, import/export, backup &amp; restore.</p>
+    <div id="msg" class="alert hidden"></div>
+    <div class="form-grid">
+      <label class="field">Cari <input id="fQ" placeholder="username / aksi / detail…"></label>
+      <label class="field">Jenis Aksi <select id="fAksi"><option value="">— semua —</option></select></label>
+      <label class="field">Dari Tanggal <input id="fDari" type="date"></label>
+      <label class="field">Sampai Tanggal <input id="fSampai" type="date"></label>
+    </div>
+    <div class="toolbar">
+      <button class="btn" id="btnFilter" type="button">🔍 Tampilkan</button>
+      <button class="btn" id="btnReset" type="button">↺ Reset</button>
+    </div>
+  </div>
+  <div class="card">
+    <div style="overflow-x:auto">
+    <table class="data" id="tabelLog">
+      <thead><tr><th>Waktu</th><th>Pengguna</th><th>Aksi</th><th>Detail</th><th>IP</th></tr></thead>
+      <tbody id="bodyLog"><tr><td colspan="5" class="muted">Memuat…</td></tr></tbody>
+    </table>
+    </div>
+    <div class="toolbar" style="justify-content:space-between">
+      <span class="muted" id="infoPage"></span>
+      <span>
+        <button class="btn small" id="btnPrev" type="button">← Sebelumnya</button>
+        <button class="btn small" id="btnNext" type="button">Berikutnya →</button>
+      </span>
+    </div>
+  </div>
+  <div class="card">
+    <h3>🧹 Hapus Log Lama</h3>
+    <p class="muted">Hapus permanen log yang lebih lama dari jumlah hari berikut. Tindakan ini sendiri dicatat di log.</p>
+    <div class="form-grid">
+      <label class="field">Lebih lama dari (hari, min. 30) <input id="hari" type="number" min="30" value="180"></label>
+    </div>
+    <div class="toolbar">
+      <button class="btn red" id="btnHapus" type="button">🗑 Hapus Log Lama</button>
+    </div>
+  </div>
+</main>
+<script src="/js/common.js?v=20261015d"></script>
+<script>
+const LABEL_AKSI = {
+  login: "Login", login_gagal: "Gagal login", logout: "Logout",
+  simpan_nilai: "Simpan nilai", import_nilai: "Import nilai",
+  simpan_rentang: "Simpan rentang", unduh_rekap: "Unduh rekap",
+  simpan_catatan_wali: "Catatan wali", simpan_catatan_bk: "Catatan BK",
+  simpan_catatan_ekskul: "Catatan ekskul", import_catatan: "Import catatan",
+  tambah_pengguna: "Tambah pengguna", ubah_pengguna: "Ubah pengguna", hapus_pengguna: "Hapus pengguna",
+  tambah_guru: "Tambah guru", ubah_guru: "Ubah guru", hapus_guru: "Hapus guru",
+  ubah_penugasan: "Ubah penugasan", import_guru: "Import guru",
+  tambah_siswa: "Tambah siswa", ubah_siswa: "Ubah siswa", hapus_siswa: "Hapus siswa",
+  import_siswa: "Import siswa",
+  tambah_kelas: "Tambah kelas", ubah_kelas: "Ubah kelas", hapus_kelas: "Hapus kelas",
+  tambah_mapel: "Tambah mapel", ubah_mapel: "Ubah mapel", hapus_mapel: "Hapus mapel",
+  ubah_desain: "Ubah desain", unggah_kop: "Unggah kop", hapus_kop: "Hapus kop",
+  unduh_backup: "Unduh backup", restore_backup: "Restore backup", hapus_log: "Hapus log",
+};
+let page = 1;
+const PER = 25;
+
+function fmtWaktu(iso) {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  } catch { return iso; }
+}
+
+async function muat() {
+  hideMsg("msg");
+  const p = new URLSearchParams({
+    q: document.getElementById("fQ").value.trim(),
+    aksi: document.getElementById("fAksi").value,
+    dari: document.getElementById("fDari").value,
+    sampai: document.getElementById("fSampai").value,
+    page, per: PER,
+  });
+  const r = await api("/api/admin/log?" + p.toString());
+  if (!r.ok) {
+    showMsg("msg", (r.data && r.data.error) || "Gagal memuat log", "error");
+    return;
+  }
+  const d = r.data;
+  const sel = document.getElementById("fAksi");
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— semua —</option>' +
+    d.daftarAksi.map((a) => `<option value="${esc(a)}">${esc(LABEL_AKSI[a] || a)}</option>`).join("");
+  sel.value = cur;
+  document.getElementById("bodyLog").innerHTML = d.log.length ? d.log.map((x) => `
+    <tr>
+      <td style="white-space:nowrap">${esc(fmtWaktu(x.waktu))}</td>
+      <td>${esc(x.username || "-")}<br><span class="muted">${esc(x.peran || "")}</span></td>
+      <td><span class="badge">${esc(LABEL_AKSI[x.aksi] || x.aksi)}</span></td>
+      <td>${esc(x.detail || "-")}</td>
+      <td class="muted">${esc(x.ip || "-")}</td>
+    </tr>`).join("") :
+    '<tr><td colspan="5" class="muted">Tidak ada log yang cocok.</td></tr>';
+  const totalPage = Math.max(1, Math.ceil(d.total / d.per));
+  document.getElementById("infoPage").textContent =
+    `Halaman ${d.page} dari ${totalPage} — ${d.total} baris`;
+  document.getElementById("btnPrev").disabled = d.page <= 1;
+  document.getElementById("btnNext").disabled = d.page >= totalPage;
+}
+
+(async () => {
+  const user = await requireLogin(["admin"]);
+  if (!user) return;
+  await muat();
+  document.getElementById("btnFilter").addEventListener("click", () => { page = 1; muat(); });
+  document.getElementById("btnReset").addEventListener("click", () => {
+    document.getElementById("fQ").value = "";
+    document.getElementById("fAksi").value = "";
+    document.getElementById("fDari").value = "";
+    document.getElementById("fSampai").value = "";
+    page = 1; muat();
+  });
+  document.getElementById("btnPrev").addEventListener("click", () => { if (page > 1) { page--; muat(); } });
+  document.getElementById("btnNext").addEventListener("click", () => { page++; muat(); });
+  document.getElementById("btnHapus").addEventListener("click", async () => {
+    hideMsg("msg");
+    const hari = Number(document.getElementById("hari").value);
+    if (!Number.isInteger(hari) || hari < 30) {
+      showMsg("msg", "Minimal 30 hari.", "error");
+      return;
+    }
+    if (!confirm(`Hapus permanen SEMUA log yang lebih lama dari ${hari} hari?\n\nTindakan ini tidak bisa dibatalkan.`)) return;
+    const r = await api("/api/admin/log/lama", { method: "DELETE", body: JSON.stringify({ hari }) });
+    if (r.ok) {
+      showMsg("msg", `${r.data.terhapus} baris log dihapus.`, "ok");
+      page = 1; muat();
+    } else {
+      showMsg("msg", (r.data && r.data.error) || "Gagal menghapus", "error");
+    }
+  });
+})();
+</script>
+</body>
+</html>

@@ -133,3 +133,19 @@ if (!kolomAda("guru", "is_staf"))
   db.exec("ALTER TABLE guru ADD COLUMN is_staf INTEGER DEFAULT 0");
 if (!kolomAda("guru", "jabatan"))
   db.exec("ALTER TABLE guru ADD COLUMN jabatan TEXT");
+
+/* ---------- Log aktivitas (admin) ---------- */
+db.exec(`
+CREATE TABLE IF NOT EXISTS activity_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  waktu TEXT NOT NULL,
+  user_id INTEGER,
+  username TEXT,
+  peran TEXT,
+  aksi TEXT NOT NULL,
+  detail TEXT,
+  ip TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_log_waktu ON activity_log(waktu DESC);
+CREATE INDEX IF NOT EXISTS idx_log_aksi ON activity_log(aksi);
+`);

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { db } from "../db";
 import { requireRole } from "../auth";
-import { parseCSV, csvField, periodeAktif, DEFAULT_RENTANG, nisExcel, normalisasiNIS, predikatUntuk } from "../util";
+import { parseCSV, csvField, periodeAktif, DEFAULT_RENTANG, nisExcel, normalisasiNIS, predikatUntuk, catatLog, namaMapelKelas } from "../util";
 
 const guru = new Hono();
 guru.use(requireRole("guru"));
@@ -119,6 +119,7 @@ guru.put("/rentang", async (c) => {
     for (const r of rentang) ins.run(mapel_id, gid, r.label, r.min_nilai, r.max_nilai);
   });
   simpan();
+  catatLog(c, "simpan_rentang", `${namaMapelKelas(mapel_id)} (${rentang.length} predikat)`);
   return c.json({ ok: true });
 });
 
@@ -185,6 +186,7 @@ guru.put("/nilai", async (c) => {
     }
   });
   simpan();
+  catatLog(c, "simpan_nilai", `${tersimpan} nilai — ${namaMapelKelas(mapel_id, kelas_id)}`);
   return c.json({ ok: true, tersimpan, gagal });
 });
 
@@ -324,6 +326,7 @@ guru.post("/nilai/import", async (c) => {
     }
   });
   simpan();
+  catatLog(c, "import_nilai", `${tersimpan} nilai — ${namaMapelKelas(mapel_id, kelas_id)}`);
   return c.json({ ok: true, tersimpan, gagal });
 });
 

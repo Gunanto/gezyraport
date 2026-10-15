@@ -9,6 +9,7 @@ import {
   setSessionCookie,
   clearSessionCookie,
 } from "./auth";
+import { catatLog } from "./util";
 import adminRoutes from "./routes/admin";
 import guruRoutes from "./routes/guru";
 import raportRoutes from "./routes/raport";
@@ -31,10 +32,15 @@ app.post("/api/login", async (c) => {
   const u = db
     .query("SELECT * FROM users WHERE username = ?")
     .get(username) as any;
-  if (!u || !(await Bun.password.verify(password, u.password_hash)))
+  if (!u || !(await Bun.password.verify(password, u.password_hash))) {
+    catatLog(c, "login_gagal", "username atau password salah", {
+      username: String(username).slice(0, 64),
+    });
     return c.json({ error: "Username atau password salah" }, 401);
+  }
   const sid = createSession(u.id);
   setSessionCookie(c, sid);
+  catatLog(c, "login", undefined, { id: u.id, username: u.username, role: u.role });
   return c.json({
     ok: true,
     user: { id: u.id, username: u.username, role: u.role },
@@ -43,6 +49,8 @@ app.post("/api/login", async (c) => {
 
 app.post("/api/logout", (c) => {
   const sid = getCookie(c, "sesi");
+  const u = getSessionUser(c) as any;
+  if (u) catatLog(c, "logout", undefined, { id: u.id, username: u.username, role: u.role });
   if (sid) destroySession(sid);
   clearSessionCookie(c);
   return c.json({ ok: true });

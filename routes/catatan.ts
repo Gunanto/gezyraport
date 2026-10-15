@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { db } from "../db";
 import { requireRole } from "../auth";
-import { periodeAktif, parseCSV, csvField, nisExcel, normalisasiNIS } from "../util";
+import { periodeAktif, parseCSV, csvField, nisExcel, normalisasiNIS, catatLog } from "../util";
 
 /**
  * Fase 2 — input catatan raport + kehadiran.
@@ -177,6 +177,7 @@ catatan.put("/wali", async (c) => {
     }
   });
   simpan();
+  catatLog(c, "simpan_catatan_wali", `${tersimpan} siswa — kelas ${namaKelas(kelas_id)}`);
   return c.json({ ok: true, tersimpan, gagal });
 });
 
@@ -221,6 +222,7 @@ catatan.put("/bk", async (c) => {
     }
   });
   simpan();
+  catatLog(c, "simpan_catatan_bk", `${tersimpan} siswa — kelas ${namaKelas(kelas_id)}`);
   return c.json({ ok: true, tersimpan, gagal });
 });
 
@@ -263,6 +265,7 @@ catatan.put("/ekskul", async (c) => {
     }
   });
   simpan();
+  catatLog(c, "simpan_catatan_ekskul", `${tersimpan} siswa — kelas ${namaKelas(kelas_id)}`);
   return c.json({ ok: true, tersimpan, gagal });
 });
 
@@ -454,6 +457,7 @@ catatan.post("/:fitur/import", async (c) => {
     }
   });
   simpan();
+  catatLog(c, "import_catatan", `fitur ${key}: ${sukses} baris`);
   return c.json({ ok: true, sukses, gagal });
 });
 

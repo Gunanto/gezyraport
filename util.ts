@@ -50,6 +50,48 @@ export function predikatUntuk(
   return hit ? hit.label : null;
 }
 
+/** Catat satu baris log aktivitas. Tidak pernah menggagalkan aksi utama. */
+export function catatLog(
+  c: any,
+  aksi: string,
+  detail?: string,
+  who?: { id?: number | null; username?: string | null; role?: string | null }
+) {
+  try {
+    const u = who ?? (c.get("user") as any);
+    const fwd = c.req.header("x-forwarded-for");
+    const ip =
+      (fwd ? fwd.split(",")[0].trim() : null) ||
+      c.req.header("x-real-ip") ||
+      null;
+    db.query(
+      `INSERT INTO activity_log (waktu, user_id, username, peran, aksi, detail, ip)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      new Date().toISOString(),
+      u?.id ?? null,
+      u?.username ?? null,
+      u?.role ?? u?.peran ?? null,
+      aksi,
+      detail ?? null,
+      ip
+    );
+  } catch {
+    /* abaikan */
+  }
+}
+
+/** Nama mapel (+kelas) untuk detail log yang mudah dibaca. */
+export function namaMapelKelas(mapel_id: any, kelas_id?: any): string {
+  const m = db.query("SELECT nama FROM mapel WHERE id = ?").get(mapel_id) as any;
+  let s = m?.nama ?? `mapel#${mapel_id}`;
+  if (kelas_id) {
+    const k = db.query("SELECT nama FROM kelas WHERE id = ?").get(kelas_id) as any;
+    s += ` kelas ${k?.nama ?? kelas_id}`;
+  }
+  return s;
+}
+
 /** Parser CSV sederhana (mendukung field ber-quote). */
 export function parseCSV(text: string): string[][] {
   const rows: string[][] = [];
