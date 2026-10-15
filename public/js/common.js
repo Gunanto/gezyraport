@@ -24,8 +24,7 @@ function navGuru(user) {
   if (user.punya_ajar) {
     items.push(
       ["Rentang Nilai", "/rentang.html"],
-      ["Input Nilai", "/nilai.html"],
-      ["Catatan Guru", "/catatan-guru.html"]
+      ["Input Nilai", "/nilai.html"]
     );
   }
   if (user.wali_kelas && user.wali_kelas.length) {

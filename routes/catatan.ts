@@ -266,49 +266,6 @@ catatan.put("/ekskul", async (c) => {
   return c.json({ ok: true, tersimpan, gagal });
 });
 
-/* ================= CATATAN GURU MAPEL ================= */
-/* catatan_guru per kelas+mapel. Guard: guru mengajar mapel itu di kelas itu. */
-
-catatan.get("/guru", (c) => {
-  const kelas_id = c.req.query("kelas_id");
-  const mapel_id = c.req.query("mapel_id");
-  if (!kelas_id || !mapel_id || !kelasAda(kelas_id))
-    return c.json({ error: "kelas_id dan mapel_id wajib diisi" }, 400);
-  const gi = infoGuru(c);
-  if (gi && !cekAjar(gi.gid, mapel_id, kelas_id))
-    return c.json({ error: "Anda tidak mengajar mapel ini di kelas ini" }, 403);
-  return c.json({
-    siswa: siswaDenganCatatan(kelas_id, ["catatan_guru"]),
-    periode: periodeAktif(),
-  });
-});
-
-catatan.put("/guru", async (c) => {
-  const gi = infoGuru(c);
-  const { kelas_id, mapel_id, rows } = await c.req.json();
-  if (!kelas_id || !mapel_id || !kelasAda(kelas_id) || !Array.isArray(rows))
-    return c.json({ error: "kelas_id, mapel_id, dan rows wajib diisi" }, 400);
-  if (gi && !cekAjar(gi.gid, mapel_id, kelas_id))
-    return c.json({ error: "Anda tidak mengajar mapel ini di kelas ini" }, 403);
-  let tersimpan = 0;
-  const gagal: string[] = [];
-  const simpan = db.transaction(() => {
-    for (const r of rows) {
-      const nama = cekSiswaKelas(r.siswa_id, kelas_id);
-      if (!nama) {
-        gagal.push(`Siswa ID ${r.siswa_id}: bukan siswa kelas ini`);
-        continue;
-      }
-      upsertCatatan(Number(r.siswa_id), {
-        catatan_guru: r.catatan_guru ?? null,
-      });
-      tersimpan++;
-    }
-  });
-  simpan();
-  return c.json({ ok: true, tersimpan, gagal });
-});
-
 /* ================= TEMPLATE & IMPORT CSV ================= */
 /* Kolom nis & nama hanya referensi baca manusia; pencocokan via nis.
    Hanya kolom milik fitur itu yang diupdate; kolom lain tidak tersentuh.
@@ -346,15 +303,6 @@ const FITUR: Record<string, FiturCatatan> = {
     perluMapel: false,
     cek: (gi) =>
       gi && !gi.is_ekskul ? "Halaman ini khusus pembina ekskul" : null,
-  },
-  guru: {
-    kolom: ["catatan_guru"],
-    csv: ["nis", "nama", "catatan_guru"],
-    perluMapel: true,
-    cek: (gi, kelas_id, mapel_id) =>
-      gi && !cekAjar(gi.gid, mapel_id, kelas_id)
-        ? "Anda tidak mengajar mapel ini di kelas ini"
-        : null,
   },
 };
 

@@ -36,7 +36,6 @@ function renderCetak(d) {
   <div class="catatan-box"><b>Catatan BK</b>${esc(cat.bk || "-")}</div>
   <div class="catatan-box"><b>Catatan Wali Kelas</b>${esc(cat.wali || "-")}</div>
   <div class="catatan-box"><b>Catatan Ekstrakurikuler</b>${esc(cat.ekskul || "-")}</div>
-  <div class="catatan-box"><b>Catatan Guru</b>${esc(cat.guru || "-")}</div>
   <p><b>Ketidakhadiran:</b> Sakit: ${d.kehadiran.sakit} hari &nbsp; Izin: ${d.kehadiran.izin} hari &nbsp; Tanpa keterangan: ${d.kehadiran.alpa} hari</p>
   <div class="ttd-tempat">${esc(tempat)}${tempat ? "," : ""} ${esc(tanggalTeks)}</div>
   <div class="ttd">

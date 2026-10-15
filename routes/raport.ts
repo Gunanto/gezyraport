@@ -87,7 +87,6 @@ function bangunRaport(sw: any) {
           bk: cat.catatan_bk,
           wali: cat.catatan_wali,
           ekskul: cat.catatan_ekskul,
-          guru: cat.catatan_guru,
         }
       : null,
     kehadiran: {
