@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { db } from "../db";
 import { requireRole } from "../auth";
 import { parseCSV, csvField, validTanggalISO, nisExcel, normalisasiNIS, periodeAktif, catatLog, bungkusCSV } from "../util";
-import { existsSync, mkdirSync, unlinkSync } from "node:fs";
+import { existsSync, mkdirSync, unlinkSync, readdirSync } from "node:fs";
 
 const admin = new Hono();
 admin.use(requireRole("admin"));
@@ -1179,14 +1179,20 @@ admin.put("/desain", async (c) => {
 });
 
 const KOP_DIR = "data/uploads";
-const KOP_FILES = ["kop.png", "kop.jpg", "kop.jpeg"];
 
 function hapusKopLama() {
-  for (const f of KOP_FILES) {
+  let files: string[] = [];
+  try {
+    files = readdirSync(KOP_DIR);
+  } catch {
+    return; /* folder belum ada */
+  }
+  for (const f of files) {
+    if (!/^kop[.-]/i.test(f)) continue;
     try {
       unlinkSync(`${KOP_DIR}/${f}`);
     } catch {
-      /* belum ada — abaikan */
+      /* abaikan */
     }
   }
 }
@@ -1204,7 +1210,7 @@ admin.post("/desain/kop", async (c) => {
   if (f.size > 2 * 1024 * 1024)
     return c.json({ error: "Ukuran file maksimal 2 MB" }, 400);
   const ext = tipe === "image/png" ? "png" : "jpg";
-  const nama = `kop.${ext}`;
+  const nama = `kop-${Date.now()}.${ext}`; // unik per upload: cegah cache browser
   if (!existsSync(KOP_DIR)) mkdirSync(KOP_DIR, { recursive: true });
   hapusKopLama();
   await Bun.write(`${KOP_DIR}/${nama}`, f);
