@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Guru — GezyRaport</title>
-<link rel="stylesheet" href="/css/style.css?v=20261015d">
+<link rel="stylesheet" href="/css/style.css?v=20261015e">
 </head>
 <body>
 <header class="topbar">
@@ -41,6 +41,7 @@
     <div class="toolbar" style="margin-bottom:.6rem; flex-wrap:wrap; gap:.4rem">
       <button class="btn small" type="button" id="btnTemplateCsv">📄 Template CSV</button>
       <button class="btn small" type="button" id="btnExportCsv">📤 Export CSV</button>
+      <button class="btn small" type="button" id="btnExportAjar">📊 Export Rekap Mengajar</button>
       <button class="btn small gold" type="button" id="btnImportCsv">📥 Import CSV</button>
       <input type="file" id="fileCsv" accept=".csv,text/csv" class="hidden">
     </div>
@@ -67,7 +68,7 @@
     <div id="msgAjar" class="alert hidden"></div>
   </div>
 </main>
-<script src="/js/common.js?v=20261015d"></script>
+<script src="/js/common.js?v=20261015e"></script>
 <script>
 let daftar = [], daftarMapel = [], daftarKelas = [];
 let ajarGuruId = null, ajarList = [];
@@ -214,6 +215,9 @@ function hapusAjar(i) { ajarList.splice(i, 1); renderAjar(); }
   });
   document.getElementById("btnExportCsv").addEventListener("click", () => {
     location.href = "/api/admin/guru/export";
+  });
+  document.getElementById("btnExportAjar").addEventListener("click", () => {
+    location.href = "/api/admin/guru/export-mengajar";
   });
   document.getElementById("btnImportCsv").addEventListener("click", () => {
     document.getElementById("fileCsv").click();

@@ -744,6 +744,77 @@ admin.get("/guru/export", (c) => {
   return c.body(bungkusCSV(lines));
 });
 
+/** Export rekap mengajar: satu baris per (guru x mapel), tiap kelas di sel sendiri.
+ *  Satu arah (bukan untuk import ulang). */
+admin.get("/guru/export-mengajar", (c) => {
+  const wali = new Map<number, string[]>();
+  for (const r of db
+    .query(
+      "SELECT wali_guru_id AS gid, nama FROM kelas WHERE wali_guru_id IS NOT NULL ORDER BY tingkat, nama"
+    )
+    .all() as any[])
+    wali.set(r.gid, [...(wali.get(r.gid) ?? []), r.nama]);
+
+  const rows = db
+    .query(
+      `SELECT g.id AS gid, g.nama, g.is_bk, g.is_ekskul, g.is_staf, g.jabatan,
+              m.kode AS mapel, m.urutan, k.nama AS kelas
+       FROM guru g
+       LEFT JOIN guru_mapel gm ON gm.guru_id = g.id
+       LEFT JOIN mapel m ON m.id = gm.mapel_id
+       LEFT JOIN kelas k ON k.id = gm.kelas_id
+       ORDER BY g.nama, m.urutan, k.tingkat, k.nama`
+    )
+    .all() as any[];
+
+  const grup: {
+    nama: string;
+    peran: string;
+    mapel: string;
+    kelas: string[];
+  }[] = [];
+  const idx = new Map<string, number>();
+  for (const r of rows) {
+    const key = r.gid + "|" + (r.mapel ?? "");
+    let gi = idx.get(key);
+    if (gi === undefined) {
+      const peran: string[] = [];
+      if (r.is_bk) peran.push("BK");
+      if (r.is_ekskul) peran.push("Ekskul");
+      if (r.is_staf) peran.push("Staf" + (r.jabatan ? ": " + r.jabatan : ""));
+      const wk = wali.get(r.gid);
+      if (wk && wk.length) peran.push("Wali Kelas " + wk.join(", "));
+      gi = grup.length;
+      idx.set(key, gi);
+      grup.push({
+        nama: r.nama,
+        peran: peran.join(" + ") || "-",
+        mapel: r.mapel ?? "-",
+        kelas: [],
+      });
+    }
+    if (r.kelas) grup[gi].kelas.push(r.kelas);
+  }
+
+  const nMax = Math.max(1, ...grup.map((g) => g.kelas.length));
+  const header = ["No", "Nama Guru", "Peran", "Mapel"];
+  for (let i = 1; i <= nMax; i++) header.push("Kelas " + i);
+  const lines = [header.join(",")];
+  grup.forEach((g, i) => {
+    const sel = [String(i + 1), g.nama, g.peran, g.mapel];
+    for (let j = 0; j < nMax; j++) sel.push(g.kelas[j] ?? "");
+    lines.push(sel.map(csvField).join(","));
+  });
+
+  catatLog(c, "export_rekap_mengajar", `${grup.length} baris`);
+  c.header("Content-Type", "text/csv; charset=utf-8");
+  c.header(
+    "Content-Disposition",
+    'attachment; filename="rekap-mengajar-guru.csv"'
+  );
+  return c.body(bungkusCSV(lines));
+});
+
 admin.post("/guru/import", async (c) => {
   const body = await c.req.parseBody();
   const file = body["file"];
