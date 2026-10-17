@@ -1,0 +1,17 @@
+[Unit]
+Description=GezyRaport database backup ke Telegram
+After=network-online.target gezyraport.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/gezyraport
+EnvironmentFile=/etc/gezyraport/telegram-backup.env
+ExecStart=/usr/local/bin/bun scripts/backup-telegram.ts
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ReadOnlyPaths=/opt/gezyraport/data/raport.db

@@ -131,4 +131,10 @@ Halaman leger menampilkan matriks No/NIS/Nama × 12 mapel + rata-rata (predikat 
 
 **Fase 3**:
 - Arsip multi-semester
-- Backup otomatis database
+- Backup otomatis database ke bot Telegram setiap hari pukul 01.30 WIB
+
+### Backup otomatis ke Telegram
+
+Backup memakai snapshot SQLite yang konsisten, lalu mengirim file `gezyraport-YYYYMMDDHHMMSS.db` ke chat Telegram yang dikonfigurasi. Token bot dan chat ID disimpan di `/etc/gezyraport/telegram-backup.env` pada VPS dan tidak masuk Git.
+
+Salin `ops/systemd/telegram-backup.env.example`, isi `TELEGRAM_BOT_TOKEN` dan `TELEGRAM_CHAT_ID`, lalu aktifkan `gezyraport-telegram-backup.timer`. Timer memakai zona waktu `Asia/Jakarta`, meskipun zona waktu sistem VPS berbeda.
