@@ -1,6 +1,6 @@
 # 🎓 GezyRaport
 
-Aplikasi raport digital untuk **SMP Negeri 1 Punggur** — Fase 1 (MVP) + Fase 2 selesai.
+Aplikasi raport digital untuk **SMP Negeri 1 Punggur** — Fase 1, Fase 2, dan backup otomatis Fase 3 sudah tersedia.
 
 Stack: **Bun + Hono + bun:sqlite** (mode WAL), satu proses. Frontend: HTML + CSS + JS vanilla (tanpa framework, tanpa CDN), diserve langsung oleh Hono dari `./public`.
 
@@ -98,7 +98,17 @@ gezyraport/
 │   └── uploads/     # gambar kop raport (kop.png / kop.jpg)
 ```
 
-## Deploy VPS (contoh systemd)
+## Deploy VPS
+
+Deployment produksi saat ini memakai:
+
+- URL: <https://raport.gezytech.web.id>
+- Direktori aplikasi: `/opt/gezyraport`
+- Port internal: `3022`
+- Service aplikasi: `gezyraport.service`
+- Bun: `/usr/local/bin/bun`
+
+Contoh unit service yang dipakai:
 
 ```ini
 [Unit]
@@ -106,16 +116,20 @@ Description=GezyRaport
 After=network.target
 
 [Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
 WorkingDirectory=/opt/gezyraport
-ExecStart=/root/.bun/bin/bun server.ts
+ExecStart=/usr/local/bin/bun server.ts
 Environment=PORT=3022
 Restart=always
+RestartSec=3
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-Lalu: `systemctl enable --now gezyraport`. Backup cukup dengan menyalin `data/raport.db`.
+Lalu: `sudo systemctl daemon-reload && sudo systemctl enable --now gezyraport`.
 
 ## Judul & tempat/tanggal raport (bisa diubah admin)
 
@@ -131,10 +145,30 @@ Halaman leger menampilkan matriks No/NIS/Nama × 12 mapel + rata-rata (predikat 
 
 **Fase 3**:
 - Arsip multi-semester
-- Backup otomatis database ke bot Telegram setiap hari pukul 01.30 WIB
 
-### Backup otomatis ke Telegram
+### Backup otomatis ke Telegram (aktif)
 
-Backup memakai snapshot SQLite yang konsisten, lalu mengirim file `gezyraport-YYYYMMDDHHMMSS.db` ke chat Telegram yang dikonfigurasi. Token bot dan chat ID disimpan di `/etc/gezyraport/telegram-backup.env` pada VPS dan tidak masuk Git.
+Backup memakai snapshot SQLite yang konsisten dan pemeriksaan `integrity_check`, lalu mengirim file `gezyraport-YYYYMMDDHHMMSS.db` ke chat Telegram yang dikonfigurasi. Token bot dan chat ID disimpan di `/etc/gezyraport/telegram-backup.env` pada VPS dan tidak masuk Git.
 
-Salin `ops/systemd/telegram-backup.env.example`, isi `TELEGRAM_BOT_TOKEN` dan `TELEGRAM_CHAT_ID`, lalu aktifkan `gezyraport-telegram-backup.timer`. Timer memakai zona waktu `Asia/Jakarta`, meskipun zona waktu sistem VPS berbeda.
+Konfigurasi dan unit systemd:
+
+- Skrip: `scripts/backup-telegram.ts`
+- Environment file: `/etc/gezyraport/telegram-backup.env` (mode `0600`)
+- Service sekali jalan: `gezyraport-telegram-backup.service`
+- Timer: `gezyraport-telegram-backup.timer`
+- Jadwal: setiap hari pukul **01.30 WIB** (`Asia/Jakarta`), termasuk menjalankan backup yang terlewat setelah VPS kembali aktif.
+
+Untuk instalasi baru, salin `ops/systemd/telegram-backup.env.example`, isi `TELEGRAM_BOT_TOKEN` dan `TELEGRAM_CHAT_ID`, lalu aktifkan timer:
+
+```bash
+sudo install -m 600 ops/systemd/telegram-backup.env.example /etc/gezyraport/telegram-backup.env
+sudo systemctl daemon-reload
+sudo systemctl enable --now gezyraport-telegram-backup.timer
+```
+
+Uji manual dan lihat hasilnya:
+
+```bash
+sudo systemctl start gezyraport-telegram-backup.service
+sudo journalctl -u gezyraport-telegram-backup.service -n 20 --no-pager
+```
