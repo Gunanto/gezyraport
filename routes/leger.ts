@@ -106,11 +106,25 @@ function bangunLeger(kelas_id: number) {
     const rata2 = jml ? Math.round((total / jml) * 10) / 10 : null;
     return { id: s.id, nis: s.nis, nama: s.nama, nilai, rata2 };
   });
+  // Nilai rata-rata sama mendapat peringkat sama; peringkat berikutnya tetap berurutan.
+  const urutRanking = dataSiswa
+    .filter((s) => s.rata2 !== null)
+    .sort((a, b) => b.rata2! - a.rata2! || a.nama.localeCompare(b.nama, "id"));
+  const ranking = new Map<number, number>();
+  let peringkat = 0;
+  let rata2Sebelumnya: number | null = null;
+  for (const s of urutRanking) {
+    if (rata2Sebelumnya === null || s.rata2 !== rata2Sebelumnya) {
+      peringkat++;
+      rata2Sebelumnya = s.rata2;
+    }
+    ranking.set(s.id, peringkat);
+  }
   return {
     kelas: { id: kelas.id, nama: kelas.nama },
     periode: p,
     mapel: mapel.map((m) => ({ id: m.id, kode: m.kode, nama: m.nama })),
-    siswa: dataSiswa,
+    siswa: dataSiswa.map((s) => ({ ...s, ranking: ranking.get(s.id) ?? null })),
   };
 }
 
@@ -137,7 +151,7 @@ leger.get("/export", (c) => {
   const g = guardKelas(c);
   if (g instanceof Response) return g;
   const leg = bangunLeger(g.kelas_id);
-  const header = ["nis", "nama", ...leg.mapel.map((m) => m.kode), "rata2"];
+  const header = ["nis", "nama", ...leg.mapel.map((m) => m.kode), "rata2", "ranking"];
   const lines = [header.join(",")];
   for (const s of leg.siswa) {
     const vals: (string | number)[] = [s.nis, s.nama];
@@ -146,6 +160,7 @@ leger.get("/export", (c) => {
       vals.push(v === null || v === undefined ? "" : v);
     }
     vals.push(s.rata2 === null ? "" : s.rata2);
+    vals.push(s.ranking === null ? "" : s.ranking);
     lines.push(vals.map(csvField).join(","));
   }
   c.header("Content-Type", "text/csv; charset=utf-8");
