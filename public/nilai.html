@@ -68,9 +68,9 @@ function isiMapel() {
     daftar.map(a => `<option value="${a.mapel_id}">${esc(a.mapel_nama)}</option>`).join("");
 }
 
-async function muatNilai({ clearStatus = true } = {}) {
+async function muatNilai() {
   hideMsg("msg");
-  if (clearStatus) document.getElementById("hasilSimpan").innerHTML = "";
+  document.getElementById("hasilSimpan").innerHTML = "";
   const kelas_id = document.getElementById("kelas").value;
   const mapel_id = document.getElementById("mapel").value;
   if (!kelas_id || !mapel_id) return showMsg("msg", "Pilih kelas dan mapel dulu.", "error");
@@ -120,9 +120,9 @@ async function muatNilai({ clearStatus = true } = {}) {
     });
     const box = document.getElementById("hasilSimpan");
     if (r.ok) {
+      await muatNilai();
       box.innerHTML = `<div class="alert ok">Data tersimpan: ${r.data.tersimpan} nilai.` +
         (r.data.gagal.length ? `<br>Perlu perhatian:<ul>${r.data.gagal.map(g => `<li>${esc(g)}</li>`).join("")}</ul>` : "") + `</div>`;
-      await muatNilai({ clearStatus: false });
     } else {
       box.innerHTML = `<div class="alert error">${esc((r.data && r.data.error) || "Gagal menyimpan")}</div>`;
     }
