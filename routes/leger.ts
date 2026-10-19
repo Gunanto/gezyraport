@@ -80,7 +80,9 @@ function bangunLeger(kelas_id: number) {
     .query("SELECT id, nama, tingkat FROM kelas WHERE id = ?")
     .get(kelas_id) as any;
   const mapel = db
-    .query("SELECT id, kode, nama FROM mapel WHERE aktif = 1 ORDER BY urutan, id")
+    .query(
+      "SELECT id, kode, nama FROM mapel WHERE aktif = 1 AND LOWER(kode) != 'bk' ORDER BY urutan, id"
+    )
     .all() as any[];
   const siswa = db
     .query("SELECT id, nis, nama FROM siswa WHERE kelas_id = ? ORDER BY nama")
