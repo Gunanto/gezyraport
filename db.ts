@@ -19,7 +19,10 @@ CREATE TABLE IF NOT EXISTS guru (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER UNIQUE REFERENCES users(id),
   nama TEXT NOT NULL,
-  nip TEXT
+  nip TEXT,
+  is_bk INTEGER DEFAULT 0,
+  is_staf INTEGER DEFAULT 0,
+  jabatan TEXT
 );
 CREATE TABLE IF NOT EXISTS kelas (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -80,7 +83,6 @@ CREATE TABLE IF NOT EXISTS catatan_raport (
   semester TEXT,
   catatan_bk TEXT,
   catatan_wali TEXT,
-  catatan_ekskul TEXT,
   catatan_guru TEXT,
   sakit INTEGER DEFAULT 0,
   izin INTEGER DEFAULT 0,
@@ -106,7 +108,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 `);
 
 /* ---------- Migrasi non-destruktif Fase 2 ----------
-   Kolom peran guru (is_bk, is_ekskul). Aman untuk DB lama:
+   Kolom peran guru (is_bk). Aman untuk DB lama:
    hanya ALTER bila kolom belum ada. */
 function kolomAda(tabel: string, kolom: string): boolean {
   const info = db.query(`PRAGMA table_info(${tabel})`).all() as any[];
@@ -114,9 +116,6 @@ function kolomAda(tabel: string, kolom: string): boolean {
 }
 if (!kolomAda("guru", "is_bk"))
   db.exec("ALTER TABLE guru ADD COLUMN is_bk INTEGER DEFAULT 0");
-if (!kolomAda("guru", "is_ekskul"))
-  db.exec("ALTER TABLE guru ADD COLUMN is_ekskul INTEGER DEFAULT 0");
-
 /* ---------- Migrasi non-destruktif: judul & tempat/tanggal raport ----------
    Admin bisa mengubah judul laporan serta tempat/tanggal terbit. */
 if (!kolomAda("desain_raport", "judul_raport"))

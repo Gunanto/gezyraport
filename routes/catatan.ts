@@ -14,17 +14,16 @@ catatan.use(requireRole("guru", "admin"));
 interface GuruInfo {
   gid: number;
   is_bk: boolean;
-  is_ekskul: boolean;
 }
 
 function infoGuru(c: any): GuruInfo | null {
   const u = c.get("user") as any;
   if (u.role === "admin") return null; // admin = akses penuh, tanpa info guru
   const g = db
-    .query("SELECT id, is_bk, is_ekskul FROM guru WHERE user_id = ?")
+    .query("SELECT id, is_bk FROM guru WHERE user_id = ?")
     .get(u.id) as any;
   if (!g) return null;
-  return { gid: Number(g.id), is_bk: !!g.is_bk, is_ekskul: !!g.is_ekskul };
+  return { gid: Number(g.id), is_bk: !!g.is_bk };
 }
 
 function isWali(gid: number, kelas_id: any): boolean {
@@ -52,7 +51,7 @@ function kelasAda(kelas_id: any): boolean {
   return !!db.query("SELECT 1 FROM kelas WHERE id = ?").get(kelas_id);
 }
 
-/** Daftar kelas (untuk pemilih kelas di halaman BK/ekskul).
+/** Daftar kelas (untuk pemilih kelas di halaman BK).
  *  Guru BK hanya melihat kelas yang ditanganinya (?fitur=bk). */
 catatan.get("/kelas", (c) => {
   const gi = infoGuru(c);
@@ -226,49 +225,6 @@ catatan.put("/bk", async (c) => {
   return c.json({ ok: true, tersimpan, gagal });
 });
 
-/* ================= EKSKUL ================= */
-/* catatan_ekskul untuk semua kelas. Guard: guru is_ekskul=1 (admin: penuh). */
-
-catatan.get("/ekskul", (c) => {
-  const kelas_id = c.req.query("kelas_id");
-  if (!kelas_id || !kelasAda(kelas_id))
-    return c.json({ error: "kelas_id tidak valid" }, 400);
-  const gi = infoGuru(c);
-  if (gi && !gi.is_ekskul)
-    return c.json({ error: "Halaman ini khusus pembina ekskul" }, 403);
-  return c.json({
-    siswa: siswaDenganCatatan(kelas_id, ["catatan_ekskul"]),
-    periode: periodeAktif(),
-  });
-});
-
-catatan.put("/ekskul", async (c) => {
-  const gi = infoGuru(c);
-  if (gi && !gi.is_ekskul)
-    return c.json({ error: "Halaman ini khusus pembina ekskul" }, 403);
-  const { kelas_id, rows } = await c.req.json();
-  if (!kelas_id || !kelasAda(kelas_id) || !Array.isArray(rows))
-    return c.json({ error: "kelas_id dan rows wajib diisi" }, 400);
-  let tersimpan = 0;
-  const gagal: string[] = [];
-  const simpan = db.transaction(() => {
-    for (const r of rows) {
-      const nama = cekSiswaKelas(r.siswa_id, kelas_id);
-      if (!nama) {
-        gagal.push(`Siswa ID ${r.siswa_id}: bukan siswa kelas ini`);
-        continue;
-      }
-      upsertCatatan(Number(r.siswa_id), {
-        catatan_ekskul: r.catatan_ekskul ?? null,
-      });
-      tersimpan++;
-    }
-  });
-  simpan();
-  catatLog(c, "simpan_catatan_ekskul", `${tersimpan} siswa — kelas ${namaKelas(kelas_id)}`);
-  return c.json({ ok: true, tersimpan, gagal });
-});
-
 /** Unduh rekap catatan wali + kehadiran per kelas (khusus wali kelas ybs). */
 catatan.get("/wali/rekap", (c) => {
   const gi = infoGuru(c);
@@ -335,13 +291,6 @@ const FITUR: Record<string, FiturCatatan> = {
         : gi && !cekBK(gi.gid, kelas_id)
           ? "Anda bukan guru BK kelas ini"
           : null,
-  },
-  ekskul: {
-    kolom: ["catatan_ekskul"],
-    csv: ["nis", "nama", "catatan_ekskul"],
-    perluMapel: false,
-    cek: (gi) =>
-      gi && !gi.is_ekskul ? "Halaman ini khusus pembina ekskul" : null,
   },
 };
 

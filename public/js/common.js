@@ -34,7 +34,6 @@ function navGuru(user) {
     items.push(["Cetak per Kelas", "/cetak-kelas.html"]);
   }
   if (user.is_bk) items.push(["Catatan BK", "/bk.html"]);
-  if (user.is_ekskul) items.push(["Catatan Ekskul", "/ekskul.html"]);
   if (user.is_staf || (user.wali_kelas && user.wali_kelas.length))
     items.push(["Leger Nilai", "/leger.html"]);
   return items;

@@ -61,7 +61,7 @@ app.get("/api/me", (c) => {
   if (!u) return c.json({ error: "Belum login" }, 401);
   const guru = db
     .query(
-      "SELECT id, nama, is_bk, is_ekskul, is_staf, jabatan FROM guru WHERE user_id = ?"
+      "SELECT id, nama, is_bk, is_staf, jabatan FROM guru WHERE user_id = ?"
     )
     .get(u.id) as any;
   const siswa = db
@@ -83,7 +83,6 @@ app.get("/api/me", (c) => {
       guru_id: guru?.id ?? null,
       guru_nama: guru?.nama ?? null,
       is_bk: !!guru?.is_bk,
-      is_ekskul: !!guru?.is_ekskul,
       is_staf: !!guru?.is_staf,
       jabatan: guru?.jabatan ?? null,
       wali_kelas,

@@ -516,7 +516,8 @@ admin.get("/statistik", (c) => {
 admin.get("/guru", (c) => {
   const rows = db
     .query(
-      `SELECT g.*, u.username,
+      `SELECT g.id, g.user_id, g.nama, g.nip, g.is_bk, g.is_staf, g.jabatan,
+              u.username,
               (SELECT COUNT(*) FROM guru_mapel gm WHERE gm.guru_id = g.id) AS jml_ajar,
               CASE WHEN g.is_bk = 1
                 THEN (SELECT COUNT(*) FROM bk_kelas b WHERE b.guru_id = g.id)
@@ -529,7 +530,7 @@ admin.get("/guru", (c) => {
 });
 
 admin.post("/guru", async (c) => {
-  const { username, password, nama, nip, is_bk, is_ekskul, is_staf, jabatan } =
+  const { username, password, nama, nip, is_bk, is_staf, jabatan } =
     await c.req.json();
   if (!username || !password || !nama)
     return c.json({ error: "Username, password, dan nama wajib diisi" }, 400);
@@ -545,14 +546,13 @@ admin.post("/guru", async (c) => {
     const uid = Number(ur.lastInsertRowid);
     const gr = db
       .query(
-        "INSERT INTO guru (user_id, nama, nip, is_bk, is_ekskul, is_staf, jabatan) VALUES (?,?,?,?,?,?,?)"
+        "INSERT INTO guru (user_id, nama, nip, is_bk, is_staf, jabatan) VALUES (?,?,?,?,?,?)"
       )
       .run(
         uid,
         nama,
         nip || null,
         is_bk ? 1 : 0,
-        is_ekskul ? 1 : 0,
         is_staf ? 1 : 0,
         is_staf ? String(jabatan).trim() : null
       );
@@ -565,7 +565,7 @@ admin.post("/guru", async (c) => {
 
 admin.put("/guru/:id", async (c) => {
   const id = c.req.param("id");
-  const { nama, nip, is_bk, is_ekskul, is_staf, jabatan } = await c.req.json();
+  const { nama, nip, is_bk, is_staf, jabatan } = await c.req.json();
   const cur = db.query("SELECT * FROM guru WHERE id = ?").get(id) as any;
   if (!cur) return c.json({ error: "Guru tidak ditemukan" }, 404);
   // jabatan wajib bila hasil akhirnya berstatus staf
@@ -576,13 +576,12 @@ admin.put("/guru/:id", async (c) => {
     return c.json({ error: "Jabatan wajib diisi bila Staff dicentang" }, 400);
   db.query(
     `UPDATE guru SET nama = COALESCE(?, nama), nip = ?,
-     is_bk = COALESCE(?, is_bk), is_ekskul = COALESCE(?, is_ekskul),
+     is_bk = COALESCE(?, is_bk),
      is_staf = COALESCE(?, is_staf), jabatan = ? WHERE id = ?`
   ).run(
     nama ?? null,
     nip ?? null,
     is_bk === undefined ? null : is_bk ? 1 : 0,
-    is_ekskul === undefined ? null : is_ekskul ? 1 : 0,
     is_staf === undefined ? null : is_staf ? 1 : 0,
     jabatanAkhir,
     id
@@ -648,10 +647,10 @@ admin.put("/guru/:id/ajar", async (c) => {
 });
 
 /* ============ IMPORT/EXPORT CSV GURU ============
- * Kolom: username,nama,nip,password,is_bk,is_ekskul,is_staf,jabatan,mapel,kelas
+ * Kolom: username,nama,nip,password,is_bk,is_staf,jabatan,mapel,kelas
  * - Dicocokkan via username: sudah ada → diperbarui, baru → dibuat
  * - password: kosong = tidak diubah (guru baru: default = username)
- * - is_bk/is_ekskul/is_staf: 1/ya/yes/true/y (case-insensitive) = ya
+ * - is_bk/is_staf: 1/ya/yes/true/y (case-insensitive) = ya
  * - jabatan wajib bila is_staf = ya
  * - mapel: kode dipisah ";" ; kelas: nama dipisah ";" → cross product
  *   MENGGANTIKAN penugasan mengajar lama (hanya bila kolom mapel/kelas ada di file)
@@ -672,7 +671,6 @@ const KOLOM_GURU_CSV = [
   "nip",
   "password",
   "is_bk",
-  "is_ekskul",
   "is_staf",
   "jabatan",
   "mapel",
@@ -687,7 +685,6 @@ admin.get("/guru/template", (c) => {
       "Budi Santoso",
       "198001012005011001",
       "",
-      "0",
       "0",
       "0",
       "",
@@ -705,7 +702,7 @@ admin.get("/guru/template", (c) => {
 admin.get("/guru/export", (c) => {
   const rows = db
     .query(
-      `SELECT u.username, g.nama, g.nip, g.is_bk, g.is_ekskul, g.is_staf, g.jabatan,
+      `SELECT u.username, g.nama, g.nip, g.is_bk, g.is_staf, g.jabatan,
         (SELECT GROUP_CONCAT(kode, ';') FROM
            (SELECT DISTINCT m.kode AS kode FROM guru_mapel gm
             JOIN mapel m ON m.id = gm.mapel_id WHERE gm.guru_id = g.id)) AS mapel,
@@ -730,7 +727,6 @@ admin.get("/guru/export", (c) => {
         r.nip ?? "",
         "",
         r.is_bk ? "1" : "0",
-        r.is_ekskul ? "1" : "0",
         r.is_staf ? "1" : "0",
         r.jabatan ?? "",
         r.mapel ?? "",
@@ -757,7 +753,7 @@ admin.get("/guru/export-mengajar", (c) => {
 
   const rows = db
     .query(
-      `SELECT g.id AS gid, g.nama, g.is_bk, g.is_ekskul, g.is_staf, g.jabatan,
+      `SELECT g.id AS gid, g.nama, g.is_bk, g.is_staf, g.jabatan,
               m.kode AS mapel, m.urutan, k.nama AS kelas
        FROM guru g
        LEFT JOIN guru_mapel gm ON gm.guru_id = g.id
@@ -780,7 +776,6 @@ admin.get("/guru/export-mengajar", (c) => {
     if (gi === undefined) {
       const peran: string[] = [];
       if (r.is_bk) peran.push("BK");
-      if (r.is_ekskul) peran.push("Ekskul");
       if (r.is_staf) peran.push("Staf" + (r.jabatan ? ": " + r.jabatan : ""));
       const wk = wali.get(r.gid);
       if (wk && wk.length) peran.push("Wali Kelas " + wk.join(", "));
@@ -853,7 +848,6 @@ admin.post("/guru/import", async (c) => {
     nip: string | null;
     pw: string;
     is_bk: boolean;
-    is_ekskul: boolean;
     is_staf: boolean;
     jabatan: string | null;
     pasangan: Array<[string, string]>; // [kodeMapel, namaKelas]
@@ -872,7 +866,6 @@ admin.post("/guru/import", async (c) => {
       continue;
     }
     const is_bk = parseYaCSV(col(r, "is_bk")),
-      is_ekskul = parseYaCSV(col(r, "is_ekskul")),
       is_staf = parseYaCSV(col(r, "is_staf"));
     const jabatan = col(r, "jabatan") || null;
     if (is_staf && !jabatan) {
@@ -894,7 +887,6 @@ admin.post("/guru/import", async (c) => {
       nip: col(r, "nip") || null,
       pw: col(r, "password"),
       is_bk,
-      is_ekskul,
       is_staf,
       jabatan,
       pasangan: [],
@@ -916,7 +908,6 @@ admin.post("/guru/import", async (c) => {
       g.nama = b.nama;
       g.nip = b.nip;
       g.is_bk = b.is_bk;
-      g.is_ekskul = b.is_ekskul;
       g.is_staf = b.is_staf;
       g.jabatan = b.jabatan;
       if (b.pw) g.pw = b.pw;
@@ -926,7 +917,7 @@ admin.post("/guru/import", async (c) => {
   for (const g of grup.values()) {
     const label =
       g.nos.length > 1 ? `Baris ${g.nos.join(",")}` : `Baris ${g.nos[0]}`;
-    const { username, nama, nip, pw, is_bk, is_ekskul, is_staf } = g;
+    const { username, nama, nip, pw, is_bk, is_staf } = g;
     const jabatan = g.jabatan;
     // validasi mapel & kelas dulu sebelum mengubah apa pun.
     // Guru BK: kolom `kelas` selalu menjadi kelas yang ditangani untuk Catatan BK
@@ -993,7 +984,7 @@ admin.post("/guru/import", async (c) => {
     try {
       const ex = db
         .query(
-          "SELECT g.id, g.user_id, g.nama, g.nip, g.is_bk, g.is_ekskul, g.is_staf, g.jabatan FROM guru g JOIN users u ON u.id = g.user_id WHERE u.username = ?"
+          "SELECT g.id, g.user_id, g.nama, g.nip, g.is_bk, g.is_staf, g.jabatan FROM guru g JOIN users u ON u.id = g.user_id WHERE u.username = ?"
         )
         .get(username) as any;
       const fJabatan = is_staf ? jabatan : null;
@@ -1004,7 +995,6 @@ admin.post("/guru/import", async (c) => {
           ex.nama !== nama ||
           (ex.nip ?? null) !== nip ||
           !!ex.is_bk !== is_bk ||
-          !!ex.is_ekskul !== is_ekskul ||
           !!ex.is_staf !== is_staf ||
           (ex.jabatan ?? null) !== fJabatan;
         if (pw) berubah = true; // password diisi = perubahan
@@ -1037,12 +1027,11 @@ admin.post("/guru/import", async (c) => {
           continue;
         }
         db.query(
-          `UPDATE guru SET nama=?, nip=?, is_bk=?, is_ekskul=?, is_staf=?, jabatan=? WHERE id=?`
+          `UPDATE guru SET nama=?, nip=?, is_bk=?, is_staf=?, jabatan=? WHERE id=?`
         ).run(
           nama,
           nip,
           is_bk ? 1 : 0,
-          is_ekskul ? 1 : 0,
           is_staf ? 1 : 0,
           fJabatan,
           ex.id
@@ -1062,14 +1051,13 @@ admin.post("/guru/import", async (c) => {
           .run(username, hash, "guru");
         const gr = db
           .query(
-            "INSERT INTO guru (user_id, nama, nip, is_bk, is_ekskul, is_staf, jabatan) VALUES (?,?,?,?,?,?,?)"
+            "INSERT INTO guru (user_id, nama, nip, is_bk, is_staf, jabatan) VALUES (?,?,?,?,?,?)"
           )
           .run(
             Number(ur.lastInsertRowid),
             nama,
             nip,
             is_bk ? 1 : 0,
-            is_ekskul ? 1 : 0,
             is_staf ? 1 : 0,
             is_staf ? jabatan : null
           );
@@ -1266,7 +1254,7 @@ function ambilBagian(nama: string): any {
           .all(),
         guru: db
           .query(
-            "SELECT id, user_id, nama, nip, is_bk, is_ekskul, is_staf FROM guru ORDER BY id"
+            "SELECT id, user_id, nama, nip, is_bk, is_staf FROM guru ORDER BY id"
           )
           .all(),
       };
@@ -1311,7 +1299,7 @@ function ambilBagian(nama: string): any {
       return db
         .query(
           `SELECT siswa_id, tahun_ajaran, semester, catatan_bk, catatan_wali,
-                  catatan_ekskul, catatan_guru, sakit, izin, alpa
+                  catatan_guru, sakit, izin, alpa
            FROM catatan_raport`
         )
         .all();
@@ -1360,10 +1348,10 @@ function tulisBagian(nama: string, data: any): number {
         n++;
       }
       const ig = db.prepare(
-        "INSERT INTO guru (id, user_id, nama, nip, is_bk, is_ekskul, is_staf) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO guru (id, user_id, nama, nip, is_bk, is_staf) VALUES (?, ?, ?, ?, ?, ?)"
       );
       for (const g of data.guru)
-        ig.run(g.id, g.user_id, g.nama, g.nip ?? null, g.is_bk ?? 0, g.is_ekskul ?? 0, g.is_staf ?? 0);
+        ig.run(g.id, g.user_id, g.nama, g.nip ?? null, g.is_bk ?? 0, g.is_staf ?? 0);
       perbaikiSequence("users");
       perbaikiSequence("guru");
       break;
@@ -1446,13 +1434,13 @@ function tulisBagian(nama: string, data: any): number {
       db.exec("DELETE FROM catatan_raport");
       const q = db.prepare(
         `INSERT INTO catatan_raport (siswa_id, tahun_ajaran, semester, catatan_bk, catatan_wali,
-          catatan_ekskul, catatan_guru, sakit, izin, alpa)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          catatan_guru, sakit, izin, alpa)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
       );
       for (const r of data) {
         q.run(
           r.siswa_id, r.tahun_ajaran, r.semester,
-          r.catatan_bk ?? null, r.catatan_wali ?? null, r.catatan_ekskul ?? null,
+          r.catatan_bk ?? null, r.catatan_wali ?? null,
           r.catatan_guru ?? null, r.sakit ?? 0, r.izin ?? 0, r.alpa ?? 0
         );
         n++;

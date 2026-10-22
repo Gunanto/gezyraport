@@ -37,10 +37,10 @@ Predikat dihitung otomatis dari rentang yang ditetapkan guru; bila guru belum me
 
 ## Alur pakai (Fase 2)
 
-4. **Admin** → **Guru**: centang **Guru BK** / **Pembina Ekskul** bila perlu; → **Desain Raport**: isi nama sekolah, kepala sekolah + NIP, kota, periode aktif; upload gambar kop raport (PNG/JPEG ≤ 2 MB).
+4. **Admin** → **Guru**: centang **Guru BK** bila perlu; → **Desain Raport**: isi nama sekolah, kepala sekolah + NIP, kota, periode aktif; upload gambar kop raport (PNG/JPEG ≤ 2 MB).
 5. **Wali kelas** → **Catatan Wali Kelas**: isi catatan + kehadiran S/I/A per siswa (bisa lewat form atau template/import CSV).
-6. **Guru BK** → **Catatan BK** | **Pembina ekskul** → **Catatan Ekskul** | **Guru mapel** → **Catatan Guru** — masing-masing per kelas (form atau CSV).
-7. Menu di beranda menyesuaikan peran guru yang login (wali/BK/ekskul/pengajar).
+6. **Guru BK** → **Catatan BK** | **Guru mapel** → **Catatan Guru** — masing-masing per kelas (form atau CSV).
+7. Menu di beranda menyesuaikan peran guru yang login (wali/BK/pengajar).
 
 **Beranda admin** menampilkan card rekap (jumlah guru, siswa, kelas, mapel aktif) yang diambil langsung dari database — tiap card bisa diklik menuju halamannya. Tabel **Siswa** memakai pagination 25 baris per halaman agar ringan dibuka.
 
@@ -56,18 +56,17 @@ Kolom `nama` hanya referensi; pencocokan saat import memakai `nis` (harus siswa 
 |---|---|
 | BK | `nis,nama,catatan_bk` |
 | Wali kelas | `nis,nama,catatan_wali,sakit,izin,alpa` |
-| Ekskul | `nis,nama,catatan_ekskul` |
 | Guru mapel | `nis,nama,catatan_guru` |
 
 Template CSV terisi data yang sudah tersimpan (sekaligus export). Saat import: teks kosong = hapus catatan; angka kehadiran kosong = pertahankan nilai lama; `sakit/izin/alpa` harus angka bulat ≥ 0. Baris gagal dilaporkan per baris beserta alasannya.
 
 ### Format CSV guru (import/export, halaman Kelola Guru)
 
-Kolom: `username,nama,nip,password,is_bk,is_ekskul,is_staf,jabatan,mapel,kelas`
+Kolom: `username,nama,nip,password,is_bk,is_staf,jabatan,mapel,kelas`
 
 - Import bersifat **sinkronisasi** via `username`: belum ada → ditambah, berubah → diperbarui, **sama persis → diabaikan** (tidak dihitung sebagai update).
 - `password`: kosong = tidak diubah (guru baru: default = username). Isi untuk mereset password (dianggap perubahan).
-- `is_bk`/`is_ekskul`/`is_staf`: `1`/`ya`/`yes`/`true`/`y` (tak peduli kapital) = ya.
+- `is_bk`/`is_staf`: `1`/`ya`/`yes`/`true`/`y` (tak peduli kapital) = ya.
 - `jabatan`: wajib diisi bila `is_staf` = ya (mis. `Kepala Sekolah`, `Waka Kurikulum`).
 - `mapel`: kode mapel dipisah `;` (mis. `MTK;IPA`); `kelas`: nama kelas dipisah `;` (mis. `7A;7B`). Bila kedua kolom ada di file, kombinasinya **menggantikan** penugasan mengajar guru tersebut (kosong = hapus semua penugasan). Baris-baris dengan `username` sama digabung penugasannya (satu baris per mapel boleh). Guru BK (`is_bk=1`): kolom `kelas` = kelas yang ditangani untuk Catatan BK (di halaman Catatan BK ia hanya melihat kelas-kelas tersebut). Bila ia juga mengajar, isi kolom `mapel` seperti biasa (kode "BK" diabaikan — bukan mapel nilai). Kode/nama yang tidak dikenal membuat baris itu gagal.
 
@@ -83,14 +82,14 @@ gezyraport/
 ├── routes/
 │   ├── admin.ts     # CRUD user/mapel/kelas/siswa/guru, import/export CSV, desain + kop
 │   ├── guru.ts      # rentang nilai, input nilai, template/import CSV
-│   ├── catatan.ts   # catatan wali/BK/ekskul/guru + template/import CSV (guard peran)
+│   ├── catatan.ts   # catatan wali/BK/guru + template/import CSV (guard peran)
 │   └── raport.ts    # GET /api/raport (dengan guard peran)
 ├── public/
 │   ├── css/style.css  (termasuk @media print untuk cetak raport)
 │   ├── js/common.js   # nav dinamis per peran, esc() anti-XSS, helper fetch
 │   ├── login.html, index.html
 │   ├── users.html, guru.html, kelas.html, siswa.html, mapel.html, desain.html (admin)
-│   ├── rentang.html, nilai.html, wali.html, bk.html, ekskul.html,
+│   ├── rentang.html, nilai.html, wali.html, bk.html,
 │   │   catatan-guru.html                                         (guru)
 │   └── raport.html, cetak.html                                   (siswa/umum)
 ├── data/
