@@ -46,7 +46,8 @@ CREATE TABLE IF NOT EXISTS mapel (
   nama TEXT NOT NULL,
   kode TEXT UNIQUE NOT NULL,
   urutan INTEGER,
-  aktif INTEGER DEFAULT 1
+  aktif INTEGER DEFAULT 1,
+  tingkat TEXT DEFAULT '7,8,9'
 );
 CREATE TABLE IF NOT EXISTS guru_mapel (
   guru_id INTEGER,
@@ -126,6 +127,20 @@ if (!kolomAda("desain_raport", "tempat"))
   db.exec("ALTER TABLE desain_raport ADD COLUMN tempat TEXT DEFAULT 'Punggur'");
 if (!kolomAda("desain_raport", "tanggal_raport"))
   db.exec("ALTER TABLE desain_raport ADD COLUMN tanggal_raport TEXT");
+
+/* ---------- Migrasi non-destruktif: tingkat kelas per mapel ----------
+ * Mapel tidak selalu diampu di semua tingkat (Prakarya hanya 7 & 8,
+ * Seni Budaya hanya 9). Migrasi ini HANYA menambah kolom mapel.tingkat dan
+ * mengisinya; tabel nilai, rentang_nilai, dan guru_mapel TIDAK disentuh,
+ * jadi nilai yang sudah diinput guru tidak berubah sama sekali. */
+if (!kolomAda("mapel", "tingkat")) {
+  db.exec("ALTER TABLE mapel ADD COLUMN tingkat TEXT DEFAULT '7,8,9'");
+  db.exec("UPDATE mapel SET tingkat = '9' WHERE LOWER(kode) = 'seni'");
+  db.exec("UPDATE mapel SET tingkat = '7,8' WHERE LOWER(kode) = 'prak'");
+  db.exec(
+    "UPDATE mapel SET tingkat = '7,8,9' WHERE tingkat IS NULL OR TRIM(tingkat) = ''"
+  );
+}
 
 /* ---------- Migrasi non-destruktif: staf (kepala sekolah, waka, dsb.) ---------- */
 if (!kolomAda("guru", "is_staf"))

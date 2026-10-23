@@ -17,7 +17,7 @@
 <main class="container">
   <div class="card">
     <h2>📚 Mata Pelajaran</h2>
-    <p class="muted">Urutan menentukan tampilan di raport. Nonaktifkan mapel yang tidak dipakai agar tidak muncul di raport.</p>
+    <p class="muted">Urutan menentukan tampilan di raport. Nonaktifkan mapel yang tidak dipakai agar tidak muncul di raport. Centang <b>Berlaku di Kelas</b> menentukan di tingkat mana mapel muncul — mis. Prakarya hanya kelas 7 &amp; 8, Seni Budaya hanya kelas 9. Mapel hanya tampil di raport &amp; leger kelas yang dicentang; nilai yang sudah diinput tidak terpengaruh.</p>
     <div id="msg" class="alert hidden"></div>
     <form id="formMapel">
       <input type="hidden" id="mid">
@@ -27,6 +27,13 @@
         <label class="field">Urutan <input id="urutan" type="number" min="1"></label>
         <label class="field">Status
           <select id="aktif"><option value="1">Aktif</option><option value="0">Nonaktif</option></select>
+        </label>
+        <label class="field">Berlaku di Kelas
+          <span style="display:flex;gap:14px;align-items:center;padding-top:8px;font-weight:normal">
+            <label><input type="checkbox" class="tk" value="7" checked> 7</label>
+            <label><input type="checkbox" class="tk" value="8" checked> 8</label>
+            <label><input type="checkbox" class="tk" value="9" checked> 9</label>
+          </span>
         </label>
       </div>
       <div class="toolbar">
@@ -39,7 +46,7 @@
     <h3>Daftar Mapel</h3>
     <div style="overflow-x:auto">
     <table class="data" id="tabelMapel">
-      <thead><tr><th>Urutan</th><th>Kode</th><th>Nama</th><th>Status</th><th>Aksi</th></tr></thead>
+      <thead><tr><th>Urutan</th><th>Kode</th><th>Nama</th><th>Berlaku di Kelas</th><th>Status</th><th>Aksi</th></tr></thead>
       <tbody></tbody>
     </table>
     </div>
@@ -48,6 +55,15 @@
 <script src="/js/common.js?v=20261015e"></script>
 <script>
 let daftar = [];
+function tampilTingkat(t) {
+  const d = String(t || "").split(",").map(x => x.trim()).filter(x => ["7","8","9"].includes(x));
+  return (d.length ? d : ["7", "8", "9"]).join(", ");
+}
+function setCentangTingkat(t) {
+  const d = String(t || "").split(",").map(x => x.trim()).filter(Boolean);
+  const daftarTk = d.length ? d : ["7", "8", "9"];
+  document.querySelectorAll(".tk").forEach(cb => { cb.checked = daftarTk.includes(cb.value); });
+}
 async function muat() {
   const r = await api("/api/admin/mapel");
   if (!r.ok) return showMsg("msg", "Gagal memuat mapel", "error");
@@ -55,6 +71,7 @@ async function muat() {
   document.querySelector("#tabelMapel tbody").innerHTML = daftar.map(m =>
     `<tr>
       <td>${esc(m.urutan)}</td><td>${esc(m.kode)}</td><td>${esc(m.nama)}</td>
+      <td>${esc(tampilTingkat(m.tingkat))}</td>
       <td><span class="badge ${m.aktif ? "aktif" : "nonaktif"}">${m.aktif ? "Aktif" : "Nonaktif"}</span></td>
       <td>
         <button class="btn small" onclick="mulaiEdit(${m.id})">Ubah</button>
@@ -70,12 +87,14 @@ function mulaiEdit(id) {
   document.getElementById("kode").value = m.kode;
   document.getElementById("urutan").value = m.urutan;
   document.getElementById("aktif").value = m.aktif ? "1" : "0";
+  setCentangTingkat(m.tingkat);
   document.getElementById("btnSimpan").textContent = "Simpan Perubahan";
   document.getElementById("btnBatal").classList.remove("hidden");
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 function resetForm() {
   document.getElementById("formMapel").reset();
+  setCentangTingkat("7,8,9");
   document.getElementById("mid").value = "";
   document.getElementById("btnSimpan").textContent = "Tambah";
   document.getElementById("btnBatal").classList.add("hidden");
@@ -93,11 +112,14 @@ async function hapus(id, nama) {
   document.getElementById("formMapel").addEventListener("submit", async (e) => {
     e.preventDefault(); hideMsg("msg");
     const id = document.getElementById("mid").value;
+    const tingkat = [...document.querySelectorAll(".tk:checked")].map(cb => cb.value);
+    if (!tingkat.length) return showMsg("msg", "Centang minimal satu tingkat kelas (7/8/9).", "error");
     const payload = {
       nama: document.getElementById("nama").value.trim(),
       kode: document.getElementById("kode").value.trim(),
       urutan: Number(document.getElementById("urutan").value) || null,
       aktif: Number(document.getElementById("aktif").value),
+      tingkat,
     };
     const r = id
       ? await api(`/api/admin/mapel/${id}`, { method: "PUT", body: JSON.stringify(payload) })

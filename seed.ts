@@ -1,25 +1,26 @@
 import { db } from "./db";
 
-const MAPEL: Array<[string, string]> = [
-  ["Pendidikan Agama Islam", "PAI"],
-  ["PPKn", "PKN"],
-  ["Bahasa Indonesia", "BIN"],
-  ["Matematika", "MTK"],
-  ["Ilmu Pengetahuan Alam", "IPA"],
-  ["Ilmu Pengetahuan Sosial", "IPS"],
-  ["Bahasa Inggris", "BING"],
-  ["Informatika", "INF"],
-  ["Seni Budaya", "SENI"],
-  ["Pendidikan Jasmani", "PJOK"],
-  ["Prakarya", "PRAK"],
-  ["Muatan Lokal", "MULOK"],
+// [nama, kode, tingkat yang diampu] — Prakarya hanya 7 & 8, Seni Budaya hanya 9.
+const MAPEL: Array<[string, string, string]> = [
+  ["Pendidikan Agama Islam", "PAI", "7,8,9"],
+  ["PPKn", "PKN", "7,8,9"],
+  ["Bahasa Indonesia", "BIN", "7,8,9"],
+  ["Matematika", "MTK", "7,8,9"],
+  ["Ilmu Pengetahuan Alam", "IPA", "7,8,9"],
+  ["Ilmu Pengetahuan Sosial", "IPS", "7,8,9"],
+  ["Bahasa Inggris", "BING", "7,8,9"],
+  ["Informatika", "INF", "7,8,9"],
+  ["Seni Budaya", "SENI", "9"],
+  ["Pendidikan Jasmani", "PJOK", "7,8,9"],
+  ["Prakarya", "PRAK", "7,8"],
+  ["Muatan Lokal", "MULOK", "7,8,9"],
 ];
 
 let urutan = 1;
-for (const [nama, kode] of MAPEL) {
+for (const [nama, kode, tingkat] of MAPEL) {
   db.query(
-    "INSERT OR IGNORE INTO mapel (nama, kode, urutan, aktif) VALUES (?,?,?,1)"
-  ).run(nama, kode, urutan++);
+    "INSERT OR IGNORE INTO mapel (nama, kode, urutan, aktif, tingkat) VALUES (?,?,?,1,?)"
+  ).run(nama, kode, urutan++, tingkat);
 }
 console.log(`OK: ${MAPEL.length} mapel tersedia.`);
 

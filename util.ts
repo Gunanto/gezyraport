@@ -8,6 +8,69 @@ export const DEFAULT_RENTANG = [
   { label: "Kurang", min_nilai: 0, max_nilai: 69 },
 ];
 
+/* ---------- Tingkat kelas sebuah mapel ----------
+ * Mapel tidak selalu diampu di semua tingkat: mis. Prakarya hanya
+ * kelas 7 & 8, Seni Budaya hanya kelas 9. Kolom mapel.tingkat menyimpan
+ * daftar tingkat yang berlaku, format kanonis "7,8" / "9" / "7,8,9".
+ * Nilai kosong/NULL (data lama) diperlakukan sebagai semua tingkat. */
+export const TINGKAT_SEMUA = "7,8,9";
+
+/** Tingkat bawaan menurut kode mapel (dipakai seed, migrasi & restore lama). */
+export function tingkatDefaultKode(kode: unknown): string {
+  const k = String(kode ?? "").trim().toLowerCase();
+  if (k === "seni") return "9";
+  if (k === "prak") return "7,8";
+  return TINGKAT_SEMUA;
+}
+
+/** Urai daftar tingkat mentah (string "7, 8" / array ["7","8"]) menjadi
+ *  array terurut tanpa duplikat; entri di luar 7/8/9 dibuang. */
+export function uraiTingkat(v: unknown): string[] {
+  const mentah: unknown[] = Array.isArray(v)
+    ? v
+    : String(v ?? "").split(",");
+  const set = new Set<string>();
+  for (const x of mentah) {
+    const s = String(x).trim();
+    if (s === "7" || s === "8" || s === "9") set.add(s);
+  }
+  return ["7", "8", "9"].filter((t) => set.has(t));
+}
+
+/** Normalisasi input tingkat dari admin menjadi string kanonis "7,8".
+ *  Kembalikan null bila input tidak menghasilkan satu pun tingkat valid. */
+export function normalisasiTingkat(v: unknown): string | null {
+  const t = uraiTingkat(v);
+  return t.length ? t.join(",") : null;
+}
+
+/** Apakah mapel dengan tingkat `tingkatMapel` berlaku untuk kelas tingkat ini?
+ *  Tingkat kelas kosong/tidak dikenal → true (jangan sembunyikan mapel
+ *  hanya karena data kelas belum lengkap). */
+export function mapelCocokTingkat(
+  tingkatMapel: unknown,
+  tingkatKelas: unknown
+): boolean {
+  const tk = String(tingkatKelas ?? "").trim();
+  if (tk !== "7" && tk !== "8" && tk !== "9") return true;
+  const daftar = uraiTingkat(tingkatMapel);
+  if (!daftar.length) return true; // data lama tanpa tingkat = semua tingkat
+  return daftar.includes(tk);
+}
+
+/** Apakah mapel ini boleh dipakai di kelas ini (cek tingkat kedua belah pihak)? */
+export function mapelCocokUntukKelas(mapel_id: any, kelas_id: any): boolean {
+  const m = db
+    .query("SELECT tingkat FROM mapel WHERE id = ?")
+    .get(mapel_id) as any;
+  if (!m) return false;
+  const k = db
+    .query("SELECT tingkat FROM kelas WHERE id = ?")
+    .get(kelas_id) as any;
+  if (!k) return false;
+  return mapelCocokTingkat(m.tingkat, k.tingkat);
+}
+
 /** Periode aktif (semester + tahun ajaran) dari desain_raport. */
 export function periodeAktif(): { semester: string; tahun_ajaran: string } {
   const d = db

@@ -187,6 +187,11 @@ function hapusAjar(i) { ajarList.splice(i, 1); renderAjar(); }
     }
     const m = daftarMapel.find(x => x.id === mapel_id);
     const k = daftarKelas.find(x => x.id === kelas_id);
+    const tkM = String(m.tingkat || "").split(",").map(x => x.trim()).filter(Boolean);
+    const tkK = String(k.tingkat || "").trim();
+    if (tkM.length && tkK && !tkM.includes(tkK)) {
+      showMsg("msgAjar", `Mapel ${m.nama} hanya untuk kelas ${tkM.join(", ")} — tidak bisa ditugaskan ke kelas ${k.nama} (tingkat ${tkK}).`, "error"); return;
+    }
     ajarList.push({ mapel_id, kelas_id, mapel_nama: m.nama, kelas_nama: k.nama });
     hideMsg("msgAjar"); renderAjar();
   });

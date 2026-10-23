@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { db } from "../db";
 import { requireRole } from "../auth";
-import { parseCSV, csvField, validTanggalISO, nisExcel, normalisasiNIS, periodeAktif, catatLog, bungkusCSV } from "../util";
+import { parseCSV, csvField, validTanggalISO, nisExcel, normalisasiNIS, periodeAktif, catatLog, bungkusCSV, normalisasiTingkat, mapelCocokTingkat, tingkatDefaultKode } from "../util";
 import { existsSync, mkdirSync, unlinkSync, readdirSync } from "node:fs";
 
 const admin = new Hono();
@@ -132,17 +132,31 @@ admin.get("/mapel", (c) => {
 });
 
 admin.post("/mapel", async (c) => {
-  const { nama, kode, urutan, aktif } = await c.req.json();
+  const { nama, kode, urutan, aktif, tingkat } = await c.req.json();
   if (!nama || !kode)
     return c.json({ error: "Nama dan kode mapel wajib diisi" }, 400);
+  // tingkat: daftar tingkat kelas yang mengampu mapel ini ("7,8" / ["7","8"]).
+  // Tidak diisi → bawaan menurut kode (SENI 9; PRAK 7,8; lain 7,8,9).
+  let tkt: string;
+  if (tingkat === undefined || tingkat === null || tingkat === "") {
+    tkt = tingkatDefaultKode(kode);
+  } else {
+    const n = normalisasiTingkat(tingkat);
+    if (!n)
+      return c.json(
+        { error: "Pilih minimal satu tingkat kelas (7/8/9) untuk mapel ini" },
+        400
+      );
+    tkt = n;
+  }
   try {
     const maxU = (
       db.query("SELECT COALESCE(MAX(urutan),0) AS m FROM mapel").get() as any
     ).m;
     const r = db
-      .query("INSERT INTO mapel (nama, kode, urutan, aktif) VALUES (?,?,?,?)")
-      .run(nama, String(kode).toUpperCase().trim(), urutan ?? maxU + 1, aktif ?? 1);
-    catatLog(c, "tambah_mapel", `${nama} (${kode})`);
+      .query("INSERT INTO mapel (nama, kode, urutan, aktif, tingkat) VALUES (?,?,?,?,?)")
+      .run(nama, String(kode).toUpperCase().trim(), urutan ?? maxU + 1, aktif ?? 1, tkt);
+    catatLog(c, "tambah_mapel", `${nama} (${kode}) kelas ${tkt}`);
     return c.json({ ok: true, id: Number(r.lastInsertRowid) });
   } catch {
     return c.json({ error: "Kode mapel sudah dipakai" }, 400);
@@ -151,24 +165,38 @@ admin.post("/mapel", async (c) => {
 
 admin.put("/mapel/:id", async (c) => {
   const id = c.req.param("id");
-  const { nama, kode, urutan, aktif } = await c.req.json();
+  const { nama, kode, urutan, aktif, tingkat } = await c.req.json();
   const ada = db.query("SELECT id FROM mapel WHERE id = ?").get(id);
   if (!ada) return c.json({ error: "Mapel tidak ditemukan" }, 404);
+  // tingkat tidak dikirim = tidak diubah. Dikirim tapi kosong/invalid = tolak,
+  // agar admin tidak sengaja mengosongkan cakupan mapel.
+  // Mengubah tingkat TIDAK menyentuh nilai, rentang, maupun penugasan lama.
+  let tkt: string | null = null;
+  if (tingkat !== undefined && tingkat !== null) {
+    tkt = normalisasiTingkat(tingkat);
+    if (!tkt)
+      return c.json(
+        { error: "Pilih minimal satu tingkat kelas (7/8/9) untuk mapel ini" },
+        400
+      );
+  }
   try {
     db.query(
       `UPDATE mapel SET nama = COALESCE(?, nama), kode = COALESCE(?, kode),
-       urutan = COALESCE(?, urutan), aktif = COALESCE(?, aktif) WHERE id = ?`
+       urutan = COALESCE(?, urutan), aktif = COALESCE(?, aktif),
+       tingkat = COALESCE(?, tingkat) WHERE id = ?`
     ).run(
       nama ?? null,
       kode ? String(kode).toUpperCase().trim() : null,
       urutan ?? null,
       aktif ?? null,
+      tkt,
       id
     );
   } catch {
     return c.json({ error: "Kode mapel sudah dipakai" }, 400);
   }
-  catatLog(c, "ubah_mapel", `id ${id}`);
+  catatLog(c, "ubah_mapel", `id ${id}${tkt ? ` tingkat ${tkt}` : ""}`);
   return c.json({ ok: true });
 });
 
@@ -628,11 +656,35 @@ admin.put("/guru/:id/ajar", async (c) => {
   if (!gr) return c.json({ error: "Guru tidak ditemukan" }, 404);
   if (!Array.isArray(daftar))
     return c.json({ error: "daftar harus berupa array" }, 400);
+  // Penugasan lama guru ini dikecualikan dari cek tingkat (grandfather):
+  // nilai yang sudah terlanjur diinput lewat penugasan lama tidak boleh
+  // terkunci hanya karena pengaturan tingkat berubah.
+  const lamaSet = new Set(
+    (
+      db
+        .query("SELECT mapel_id, kelas_id FROM guru_mapel WHERE guru_id = ?")
+        .all(id) as any[]
+    ).map((a) => `${a.mapel_id}:${a.kelas_id}`)
+  );
   for (const d of daftar) {
-    const m = db.query("SELECT id FROM mapel WHERE id = ?").get(d.mapel_id);
-    const k = db.query("SELECT id FROM kelas WHERE id = ?").get(d.kelas_id);
+    const m = db
+      .query("SELECT id, nama, tingkat FROM mapel WHERE id = ?")
+      .get(d.mapel_id) as any;
+    const k = db
+      .query("SELECT id, nama, tingkat FROM kelas WHERE id = ?")
+      .get(d.kelas_id) as any;
     if (!m || !k)
       return c.json({ error: "mapel_id/kelas_id tidak valid" }, 400);
+    if (
+      !lamaSet.has(`${d.mapel_id}:${d.kelas_id}`) &&
+      !mapelCocokTingkat(m.tingkat, k.tingkat)
+    )
+      return c.json(
+        {
+          error: `Mapel ${m.nama} hanya untuk kelas ${m.tingkat} — tidak bisa ditugaskan ke kelas ${k.nama} (tingkat ${k.tingkat ?? "-"}). Ubah dulu tingkat mapelnya di menu Mapel bila memang perlu.`,
+        },
+        400
+      );
   }
   const ganti = db.transaction(() => {
     db.query("DELETE FROM guru_mapel WHERE guru_id = ?").run(id);
@@ -955,29 +1007,65 @@ admin.post("/guru/import", async (c) => {
         if (tugasBK === null) continue;
       }
       tugas = [];
-      const cacheM = new Map<string, number>();
+      const cacheM = new Map<string, any>();
+      const cacheKT = new Map<number, any>();
+      // Penugasan lama guru ini (bila sudah terdaftar) dikecualikan dari cek
+      // tingkat — nilai yang sudah diinput tidak boleh terkunci oleh aturan baru.
+      const exImpor = db
+        .query(
+          "SELECT g.id FROM guru g JOIN users u ON u.id = g.user_id WHERE u.username = ?"
+        )
+        .get(username) as any;
+      const lamaImpor = new Set<string>(
+        exImpor
+          ? (
+              db
+                .query(
+                  "SELECT mapel_id, kelas_id FROM guru_mapel WHERE guru_id = ?"
+                )
+                .all(exImpor.id) as any[]
+            ).map((a) => `${a.mapel_id}:${a.kelas_id}`)
+          : []
+      );
       let batal = false;
       for (const [kd, nk] of g.pasangan) {
         if (is_bk && kd.toLowerCase() === "bk") continue; // BK bukan mapel nilai
-        let mid = cacheM.get(kd.toLowerCase());
-          if (mid === undefined) {
-            const mm = db
-              .query("SELECT id FROM mapel WHERE LOWER(kode) = LOWER(?)")
+        let mm = cacheM.get(kd.toLowerCase());
+          if (mm === undefined) {
+            mm = db
+              .query("SELECT id, nama, tingkat FROM mapel WHERE LOWER(kode) = LOWER(?)")
               .get(kd) as any;
             if (!mm) {
               gagal.push(`${label}: kode mapel "${kd}" tidak ditemukan`);
               batal = true;
               break;
             }
-            mid = mm.id;
-            cacheM.set(kd.toLowerCase(), mid);
+            cacheM.set(kd.toLowerCase(), mm);
           }
           const kid = cariKelas(nk);
           if (kid === null) {
             batal = true;
             break;
           }
-          tugas.push([mid, kid]);
+          // Mapel yang tidak berlaku di tingkat kelas ini: pasangan BARU
+          // dilewati (dicatat sebagai peringatan), bukan menggagalkan baris.
+          let kk = cacheKT.get(kid);
+          if (kk === undefined) {
+            kk = db
+              .query("SELECT nama, tingkat FROM kelas WHERE id = ?")
+              .get(kid) as any;
+            cacheKT.set(kid, kk);
+          }
+          if (
+            !lamaImpor.has(`${mm.id}:${kid}`) &&
+            !mapelCocokTingkat(mm.tingkat, kk?.tingkat)
+          ) {
+            gagal.push(
+              `${label}: pasangan ${mm.nama} × kelas ${nk} dilewati — mapel hanya untuk kelas ${mm.tingkat}`
+            );
+            continue;
+          }
+          tugas.push([mm.id, kid]);
         }
         if (batal) continue;
     }
@@ -1273,7 +1361,7 @@ function ambilBagian(nama: string): any {
     case "mapel":
       return db
         .query(
-          "SELECT id, nama, kode, urutan, aktif FROM mapel ORDER BY urutan, id"
+          "SELECT id, nama, kode, urutan, aktif, tingkat FROM mapel ORDER BY urutan, id"
         )
         .all();
     case "penugasan":
@@ -1383,10 +1471,13 @@ function tulisBagian(nama: string, data: any): number {
     case "mapel": {
       db.exec("DELETE FROM mapel");
       const q = db.prepare(
-        "INSERT INTO mapel (id, nama, kode, urutan, aktif) VALUES (?, ?, ?, ?, ?)"
+        "INSERT INTO mapel (id, nama, kode, urutan, aktif, tingkat) VALUES (?, ?, ?, ?, ?, ?)"
       );
       for (const r of data) {
-        q.run(r.id, r.nama, r.kode, r.urutan ?? null, r.aktif ?? 1);
+        // Backup lama belum punya kolom tingkat → pakai bawaan menurut kode.
+        const tkt =
+          normalisasiTingkat(r.tingkat) ?? tingkatDefaultKode(r.kode);
+        q.run(r.id, r.nama, r.kode, r.urutan ?? null, r.aktif ?? 1, tkt);
         n++;
       }
       perbaikiSequence("mapel");

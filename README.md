@@ -35,6 +35,8 @@ Akun siswa dibuat otomatis: username & password = **NIS**.
 
 Predikat dihitung otomatis dari rentang yang ditetapkan guru; bila guru belum menetapkan, dipakai bawaan: 0–69 Kurang/Remedial, 70–79 Tercapai/Cukup, 80–89 Baik, 90–100 Amat Baik/Pengayaan.
 
+**Tingkat per mapel:** tiap mapel punya pengaturan *Berlaku di Kelas* (7/8/9) di menu Mapel — bawaan: Prakarya hanya kelas 7 & 8, Seni Budaya hanya kelas 9, mapel lain semua tingkat. Raport dan leger hanya menampilkan mapel yang berlaku untuk tingkat kelas siswa. Penugasan mengajar baru yang lintas tingkat ditolak (di form maupun import CSV guru); penugasan dan nilai yang sudah ada tidak diubah oleh pengaturan ini.
+
 ## Alur pakai (Fase 2)
 
 4. **Admin** → **Guru**: centang **Guru BK** bila perlu; → **Desain Raport**: isi nama sekolah, kepala sekolah + NIP, kota, periode aktif; upload gambar kop raport (PNG/JPEG ≤ 2 MB).

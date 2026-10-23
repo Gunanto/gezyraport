@@ -4,6 +4,7 @@ import { requireRole } from "../auth";
 import {
   periodeAktif,
   predikatUntuk,
+  mapelCocokTingkat,
   tanggalID,
   tanggalIDdariISO,
   validTanggalISO,
@@ -34,11 +35,16 @@ function bangunRaport(sw: any) {
     .get() as any;
 
   // ---- Nilai per mapel aktif (BK bukan mapel nilai: tidak dimunculkan di raport) ----
-  const mapelAktif = db
-    .query(
-      "SELECT id, nama FROM mapel WHERE aktif = 1 AND LOWER(kode) != 'bk' ORDER BY urutan, id"
-    )
-    .all() as any[];
+  // Hanya mapel yang berlaku untuk tingkat kelas siswa ini: mis. Seni Budaya
+  // tidak muncul di raport kelas 7/8, Prakarya tidak muncul di raport kelas 9.
+  // Nilai yang tersimpan tidak diubah — ini murni penyaringan tampilan.
+  const mapelAktif = (
+    db
+      .query(
+        "SELECT id, nama, tingkat FROM mapel WHERE aktif = 1 AND LOWER(kode) != 'bk' ORDER BY urutan, id"
+      )
+      .all() as any[]
+  ).filter((m) => mapelCocokTingkat(m.tingkat, sw.tingkat));
   const rows = mapelAktif.map((m) => {
     const n = db
       .query(

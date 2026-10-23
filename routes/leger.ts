@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { db } from "../db";
 import { requireRole } from "../auth";
-import { periodeAktif, predikatUntuk, csvField, bungkusCSV } from "../util";
+import { periodeAktif, predikatUntuk, mapelCocokTingkat, csvField, bungkusCSV } from "../util";
 
 /**
  * Leger nilai per kelas — matriks nilai seluruh siswa satu kelas.
@@ -79,11 +79,15 @@ function bangunLeger(kelas_id: number) {
   const kelas = db
     .query("SELECT id, nama, tingkat FROM kelas WHERE id = ?")
     .get(kelas_id) as any;
-  const mapel = db
-    .query(
-      "SELECT id, kode, nama FROM mapel WHERE aktif = 1 AND LOWER(kode) != 'bk' ORDER BY urutan, id"
-    )
-    .all() as any[];
+  // Kolom leger hanya mapel yang berlaku untuk tingkat kelas ini
+  // (mis. kelas 7/8 tanpa Seni Budaya, kelas 9 tanpa Prakarya).
+  const mapel = (
+    db
+      .query(
+        "SELECT id, kode, nama, tingkat FROM mapel WHERE aktif = 1 AND LOWER(kode) != 'bk' ORDER BY urutan, id"
+      )
+      .all() as any[]
+  ).filter((m) => mapelCocokTingkat(m.tingkat, kelas.tingkat));
   const siswa = db
     .query("SELECT id, nis, nama FROM siswa WHERE kelas_id = ? ORDER BY nama")
     .all(kelas_id) as any[];
