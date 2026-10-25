@@ -1202,6 +1202,8 @@ admin.put("/desain", async (c) => {
     judul_raport,
     tempat,
     tanggal_raport,
+    footer_baris1,
+    footer_baris2,
   } = await c.req.json();
   // tanggal_raport: undefined = tidak diubah; "" = kosongkan (pakai tanggal hari ini);
   // selain itu harus format YYYY-MM-DD yang valid.
@@ -1230,6 +1232,8 @@ admin.put("/desain", async (c) => {
     "tahun_ajaran_aktif = COALESCE(?, tahun_ajaran_aktif)",
     "judul_raport = COALESCE(?, judul_raport)",
     "tempat = COALESCE(?, tempat)",
+    "footer_baris1 = COALESCE(?, footer_baris1)",
+    "footer_baris2 = COALESCE(?, footer_baris2)",
   ];
   const params: any[] = [
     nama_sekolah ?? null,
@@ -1241,6 +1245,8 @@ admin.put("/desain", async (c) => {
     tahun_ajaran_aktif ?? null,
     judul_raport ? String(judul_raport).trim() || null : null,
     tempat ? String(tempat).trim() || null : null,
+    footer_baris1 ? String(footer_baris1).trim() || null : null,
+    footer_baris2 ? String(footer_baris2).trim() || null : null,
   ];
   if (tglMode === "clear") sets.push("tanggal_raport = NULL");
   else if (tglMode === "set") {
@@ -1544,13 +1550,21 @@ function tulisBagian(nama: string, data: any): number {
       db.exec("DELETE FROM desain_raport");
       const q = db.prepare(
         `INSERT INTO desain_raport (id, kop_path, nama_sekolah, alamat_sekolah, kepala_nama,
-          kepala_nip, kota, semester_aktif, tahun_ajaran_aktif)
-         VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)`
+          kepala_nip, kota, semester_aktif, tahun_ajaran_aktif,
+          judul_raport, tempat, tanggal_raport, footer_baris1, footer_baris2)
+         VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       );
+      // Backup lama belum punya judul/tempat/tanggal/footer → pakai bawaan
+      // (sama dengan default di db.ts), bukan NULL yang mengosongkan judul.
       q.run(
         data.kop_path ?? null, data.nama_sekolah ?? null, data.alamat_sekolah ?? null,
         data.kepala_nama ?? null, data.kepala_nip ?? null, data.kota ?? null,
-        data.semester_aktif ?? null, data.tahun_ajaran_aktif ?? null
+        data.semester_aktif ?? null, data.tahun_ajaran_aktif ?? null,
+        data.judul_raport ? data.judul_raport : "LAPORAN HASIL BELAJAR PESERTA DIDIK",
+        data.tempat ? data.tempat : "Punggur",
+        data.tanggal_raport ? data.tanggal_raport : null,
+        data.footer_baris1 ? data.footer_baris1 : "© 2026 GezyTech App · Dikembangkan oleh PakGun",
+        data.footer_baris2 ? data.footer_baris2 : "GezyRaport — SMP Negeri 1 Punggur"
       );
       n = 1;
       break;

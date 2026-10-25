@@ -127,6 +127,23 @@ if (!kolomAda("desain_raport", "tempat"))
   db.exec("ALTER TABLE desain_raport ADD COLUMN tempat TEXT DEFAULT 'Punggur'");
 if (!kolomAda("desain_raport", "tanggal_raport"))
   db.exec("ALTER TABLE desain_raport ADD COLUMN tanggal_raport TEXT");
+/* ---------- Migrasi non-destruktif: footer dua baris ----------
+   Footer bisa diubah admin lewat halaman Desain Raport. Bawaan sama
+   persis dengan teks footer lama yang tertulis mati di common.js. */
+if (!kolomAda("desain_raport", "footer_baris1"))
+  db.exec(
+    "ALTER TABLE desain_raport ADD COLUMN footer_baris1 TEXT DEFAULT '© 2026 GezyTech App · Dikembangkan oleh PakGun'"
+  );
+if (!kolomAda("desain_raport", "footer_baris2"))
+  db.exec(
+    "ALTER TABLE desain_raport ADD COLUMN footer_baris2 TEXT DEFAULT 'GezyRaport — SMP Negeri 1 Punggur'"
+  );
+db.exec(
+  "UPDATE desain_raport SET footer_baris1 = '© 2026 GezyTech App · Dikembangkan oleh PakGun' WHERE footer_baris1 IS NULL"
+);
+db.exec(
+  "UPDATE desain_raport SET footer_baris2 = 'GezyRaport — SMP Negeri 1 Punggur' WHERE footer_baris2 IS NULL"
+);
 
 /* ---------- Migrasi non-destruktif: tingkat kelas per mapel ----------
  * Mapel tidak selalu diampu di semua tingkat (Prakarya hanya 7 & 8,

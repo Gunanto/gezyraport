@@ -94,6 +94,21 @@ app.get("/api/me", (c) => {
   });
 });
 
+// ---------- Footer (bisa dibaca semua peran yang login) ----------
+// Dipakai common.js di semua halaman; admin mengubahnya lewat Desain Raport.
+app.get("/api/footer", (c) => {
+  const u = getSessionUser(c);
+  if (!u) return c.json({ error: "Belum login" }, 401);
+  const d = db
+    .query("SELECT footer_baris1, footer_baris2 FROM desain_raport WHERE id = 1")
+    .get() as any;
+  return c.json({
+    footer_baris1:
+      d?.footer_baris1 || "© 2026 GezyTech App · Dikembangkan oleh PakGun",
+    footer_baris2: d?.footer_baris2 || "GezyRaport — SMP Negeri 1 Punggur",
+  });
+});
+
 // ---------- API routes ----------
 app.route("/api/admin", adminRoutes);
 app.route("/api/guru", guruRoutes);

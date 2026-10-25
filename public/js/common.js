@@ -121,15 +121,28 @@ async function confirmHapus(pesan) {
   return confirm(pesan || "Yakin ingin menghapus data ini?");
 }
 
-/** Footer global — otomatis disuntik ke semua halaman. */
-function buildFooter() {
+/** Footer global — otomatis disuntik ke semua halaman.
+ *  Teks dibaca dari server (/api/footer, diubah admin lewat Desain Raport);
+ *  kalau belum login / gagal dimuat, pakai teks bawaan lama. Teks di-escape
+ *  supaya tidak bisa disisipi HTML, kecuali PakGun tetap ditebalkan. */
+async function buildFooter() {
   if (document.body.classList.contains("no-footer")) return;
   if (document.querySelector(".global-footer")) return;
+  let baris1 = "© 2026 GezyTech App · Dikembangkan oleh PakGun";
+  let baris2 = "GezyRaport — SMP Negeri 1 Punggur";
+  try {
+    const r = await fetch("/api/footer");
+    if (r.ok) {
+      const d = await r.json();
+      if (d.footer_baris1) baris1 = d.footer_baris1;
+      if (d.footer_baris2) baris2 = d.footer_baris2;
+    }
+  } catch (e) { /* pakai bawaan */ }
   const el = document.createElement("footer");
   el.className = "global-footer";
   el.innerHTML =
-    '<div>&copy; 2026 GezyTech App &middot; Dikembangkan oleh <b>PakGun</b></div>' +
-    '<div class="foot-sub">GezyRaport &mdash; SMP Negeri 1 Punggur</div>';
+    "<div>" + esc(baris1).replace(/PakGun/g, "<b>PakGun</b>") + "</div>" +
+    (baris2 ? '<div class="foot-sub">' + esc(baris2) + "</div>" : "");
   document.body.appendChild(el);
 }
 buildFooter();

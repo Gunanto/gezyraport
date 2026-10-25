@@ -39,6 +39,8 @@
         <label class="field">Tempat (tanda tangan) <input id="tempat" placeholder="Punggur"></label>
         <label class="field">Tanggal Raport <input id="tanggal_raport" type="date">
           <span class="muted">Kosongkan = pakai tanggal hari ini.</span></label>
+        <label class="field" style="grid-column:1/-1">Footer Baris 1 <input id="footer_baris1" placeholder="© 2026 GezyTech App · Dikembangkan oleh PakGun"></label>
+        <label class="field" style="grid-column:1/-1">Footer Baris 2 <input id="footer_baris2" placeholder="GezyRaport — SMP Negeri 1 Punggur"></label>
       </div>
       <div class="toolbar">
         <button class="btn small" type="button" id="btnClearTanggal">🧹 Kosongkan Tanggal</button>
@@ -67,7 +69,7 @@
     <p class="muted">Hanya PNG/JPEG, maksimal 2 MB. File lama otomatis ditimpa saat upload baru.</p>
   </div>
 </main>
-<script src="/js/common.js?v=20261015e"></script>
+<script src="/js/common.js?v=20261025b"></script>
 <script src="/js/cetak.js?v=20261025a"></script>
 <script>
 let kopPath = null;
@@ -103,7 +105,7 @@ async function muat() {
   const r = await api("/api/admin/desain");
   if (!r.ok) return showMsg("msg", "Gagal memuat desain", "error");
   const d = r.data.desain;
-  for (const k of ["nama_sekolah", "alamat_sekolah", "kepala_nama", "kepala_nip", "kota", "tahun_ajaran_aktif", "judul_raport", "tempat"]) {
+  for (const k of ["nama_sekolah", "alamat_sekolah", "kepala_nama", "kepala_nip", "kota", "tahun_ajaran_aktif", "judul_raport", "tempat", "footer_baris1", "footer_baris2"]) {
     document.getElementById(k).value = d[k] || "";
   }
   document.getElementById("semester_aktif").value = d.semester_aktif || "Ganjil";
@@ -118,7 +120,7 @@ async function muat() {
   document.getElementById("formDesain").addEventListener("submit", async (e) => {
     e.preventDefault(); hideMsg("msg");
     const payload = {};
-    for (const k of ["nama_sekolah", "alamat_sekolah", "kepala_nama", "kepala_nip", "kota", "semester_aktif", "tahun_ajaran_aktif", "judul_raport", "tempat"]) {
+    for (const k of ["nama_sekolah", "alamat_sekolah", "kepala_nama", "kepala_nip", "kota", "semester_aktif", "tahun_ajaran_aktif", "judul_raport", "tempat", "footer_baris1", "footer_baris2"]) {
       payload[k] = document.getElementById(k).value.trim();
     }
     payload.tanggal_raport = document.getElementById("tanggal_raport").value; // "" = kosongkan
