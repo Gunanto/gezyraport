@@ -32,7 +32,10 @@
           </select>
         </label>
         <label class="field">Tahun Ajaran Aktif <input id="tahun_ajaran_aktif" placeholder="2026/2027"></label>
-        <label class="field" style="grid-column:1/-1">Judul Laporan <input id="judul_raport" placeholder="LAPORAN HASIL BELAJAR PESERTA DIDIK"></label>
+        <label class="field" style="grid-column:1/-1">Judul Laporan
+          <textarea id="judul_raport" rows="3" placeholder="LAPORAN HASIL BELAJAR PESERTA DIDIK"></textarea>
+          <span class="muted">Tekan Enter untuk baris baru (mis. baris 1 nama laporan, baris 2 semester). Tiap baris tampil rata tengah di raport.</span>
+        </label>
         <label class="field">Tempat (tanda tangan) <input id="tempat" placeholder="Punggur"></label>
         <label class="field">Tanggal Raport <input id="tanggal_raport" type="date">
           <span class="muted">Kosongkan = pakai tanggal hari ini.</span></label>
@@ -65,7 +68,7 @@
   </div>
 </main>
 <script src="/js/common.js?v=20261015e"></script>
-<script src="/js/cetak.js?v=20261015e"></script>
+<script src="/js/cetak.js?v=20261025a"></script>
 <script>
 let kopPath = null;
 function renderKop(kop_path) {

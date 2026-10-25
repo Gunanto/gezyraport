@@ -134,7 +134,7 @@ Lalu: `sudo systemctl daemon-reload && sudo systemctl enable --now gezyraport`.
 
 ## Judul & tempat/tanggal raport (bisa diubah admin)
 
-**Admin** → **Desain Raport**: **Judul Laporan** (mis. `LAPORAN HASIL ASESMEN SUMATIF TENGAH SEMESTER GANJIL`), **Tempat**, dan **Tanggal** (kosongkan = pakai tanggal hari ini). Judul dan baris `Tempat, Tanggal` di halaman cetak mengikuti isian ini.
+**Admin** → **Desain Raport**: **Judul Laporan** (mis. `LAPORAN HASIL ASESMEN SUMATIF TENGAH SEMESTER GANJIL`), **Tempat**, dan **Tanggal** (kosongkan = pakai tanggal hari ini). Judul dan baris `Tempat, Tanggal` di halaman cetak mengikuti isian ini. Judul boleh multi-baris: tekan Enter di kotak Judul Laporan untuk baris baru — tiap baris tampil rata tengah. Di blok tanda tangan, NIP ditulis tanpa titik: `NIP 197107201997022002`.
 
 ## Leger nilai per kelas
 

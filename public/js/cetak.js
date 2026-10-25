@@ -11,9 +11,21 @@ function renderCetak(d) {
     <h2>${esc(d.sekolah.nama || "SMP NEGERI 1 PUNGGUR")}</h2>
     ${d.sekolah.alamat ? `<p>${esc(d.sekolah.alamat)}</p>` : ""}
   </div>`;
+  // Judul boleh multi-baris (dipisah Enter di form Desain): tiap baris
+  // di-escape dulu lalu digabung <br>. Baris kosong diabaikan; judul satu
+  // baris lama tetap tampil persis seperti sebelumnya. Perataan tengah
+  // sudah diatur CSS .judul-raport (text-align: center).
+  const judulBaris = String(d.sekolah.judul || "")
+    .split(/\r?\n/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map(esc);
+  const judulHtml = judulBaris.length
+    ? judulBaris.join("<br>")
+    : "LAPORAN HASIL BELAJAR PESERTA DIDIK";
   return `
   ${kopHtml}
-  <div class="judul-raport"><h3>${esc(d.sekolah.judul || "LAPORAN HASIL BELAJAR PESERTA DIDIK")}</h3></div>
+  <div class="judul-raport"><h3>${judulHtml}</h3></div>
   <table class="identitas">
     <tr><td style="width:170px">Nama Peserta Didik</td><td style="width:10px">:</td><td><b>${esc(id.nama)}</b></td>
         <td style="width:150px">Kelas</td><td style="width:10px">:</td><td>${esc(id.kelas || "-")}</td></tr>
@@ -43,11 +55,11 @@ function renderCetak(d) {
     </div>
     <div class="kolom">Wali Kelas<br><br><br>
       <div class="nama">${esc(ttd.wali_nama || "........................")}</div>
-      ${ttd.wali_nip ? `NIP. ${esc(ttd.wali_nip)}` : ""}
+      ${ttd.wali_nip ? `NIP ${esc(ttd.wali_nip)}` : ""}
     </div>
     <div class="kolom">Kepala Sekolah<br><br><br>
       <div class="nama">${esc(ttd.kepala_nama || "........................")}</div>
-      ${ttd.kepala_nip ? `NIP. ${esc(ttd.kepala_nip)}` : ""}
+      ${ttd.kepala_nip ? `NIP ${esc(ttd.kepala_nip)}` : ""}
     </div>
   </div>`;
 }
