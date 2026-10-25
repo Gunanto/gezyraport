@@ -593,9 +593,17 @@ admin.post("/guru", async (c) => {
 
 admin.put("/guru/:id", async (c) => {
   const id = c.req.param("id");
-  const { nama, nip, is_bk, is_staf, jabatan } = await c.req.json();
+  const { nama, nip, is_bk, is_staf, jabatan, password } = await c.req.json();
   const cur = db.query("SELECT * FROM guru WHERE id = ?").get(id) as any;
   if (!cur) return c.json({ error: "Guru tidak ditemukan" }, 404);
+  // Kata sandi: diisi = diganti (sama seperti menu Pengguna), kosong = tidak diganti.
+  // Sebelum perbaikan ini password di sini diabaikan diam-diam, padahal form
+  // menampilkan kolomnya — admin mengira sudah mengganti, padahal tidak.
+  if (password && cur.user_id)
+    db.query("UPDATE users SET password_hash = ? WHERE id = ?").run(
+      await Bun.password.hash(String(password)),
+      cur.user_id
+    );
   // jabatan wajib bila hasil akhirnya berstatus staf
   const stafAkhir = is_staf === undefined ? !!cur.is_staf : !!is_staf;
   const jabatanAkhir =

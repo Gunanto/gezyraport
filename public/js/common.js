@@ -121,23 +121,33 @@ async function confirmHapus(pesan) {
   return confirm(pesan || "Yakin ingin menghapus data ini?");
 }
 
-/** Footer global — otomatis disuntik ke semua halaman.
- *  Teks dibaca dari server (/api/footer, diubah admin lewat Desain Raport);
- *  kalau belum login / gagal dimuat, pakai teks bawaan lama. Teks di-escape
- *  supaya tidak bisa disisipi HTML, kecuali PakGun tetap ditebalkan. */
+/** Footer global — otomatis disuntik ke semua halaman, plus nama sekolah
+ *  di header dan di subjudul login. Teks dibaca dari server (/api/footer,
+ *  publik tanpa login, diubah admin lewat Desain Raport); kalau gagal
+ *  dimuat, pakai teks bawaan lama. Teks di-escape supaya tidak bisa
+ *  disisipi HTML, kecuali PakGun tetap ditebalkan. */
 async function buildFooter() {
-  if (document.body.classList.contains("no-footer")) return;
-  if (document.querySelector(".global-footer")) return;
   let baris1 = "© 2026 GezyTech App · Dikembangkan oleh PakGun";
   let baris2 = "GezyRaport — SMP Negeri 1 Punggur";
+  let namaSekolah = "";
   try {
     const r = await fetch("/api/footer");
     if (r.ok) {
       const d = await r.json();
       if (d.footer_baris1) baris1 = d.footer_baris1;
       if (d.footer_baris2) baris2 = d.footer_baris2;
+      if (d.nama_sekolah) namaSekolah = d.nama_sekolah;
     }
   } catch (e) { /* pakai bawaan */ }
+  // Nama sekolah ikut setting admin — di header semua halaman dan di login.
+  if (namaSekolah) {
+    const kecil = document.querySelector(".brand small");
+    if (kecil) kecil.textContent = namaSekolah;
+    const sub = document.querySelector(".login-card .sub");
+    if (sub) sub.innerHTML = "Aplikasi Raport Digital<br>" + esc(namaSekolah);
+  }
+  if (document.body.classList.contains("no-footer")) return;
+  if (document.querySelector(".global-footer")) return;
   const el = document.createElement("footer");
   el.className = "global-footer";
   el.innerHTML =
