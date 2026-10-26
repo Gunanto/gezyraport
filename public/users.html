@@ -48,11 +48,31 @@
   </div>
   <div class="card">
     <h3>Daftar Pengguna</h3>
+    <div class="toolbar">
+      <label class="field" style="flex:1">Cari pengguna <input id="fQ" placeholder="Username / nama guru / nama siswa / NIS…"></label>
+      <button class="btn" id="btnCari" type="button">🔍 Cari</button>
+      <button class="btn" id="btnResetCari" type="button">↺ Reset</button>
+      <label class="field">Per halaman
+        <select id="fPer">
+          <option value="10">10</option>
+          <option value="25" selected>25</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+      </label>
+    </div>
     <div style="overflow-x:auto">
     <table class="data" id="tabelUser">
       <thead><tr><th>Username</th><th>Role</th><th>Terhubung</th><th>Aksi</th></tr></thead>
       <tbody></tbody>
     </table>
+    </div>
+    <div class="toolbar" style="justify-content:space-between">
+      <span class="muted" id="infoPage"></span>
+      <span>
+        <button class="btn small" id="btnPrev" type="button">← Sebelumnya</button>
+        <button class="btn small" id="btnNext" type="button">Berikutnya →</button>
+      </span>
     </div>
   </div>
 </main>
@@ -83,12 +103,20 @@ async function muatSiswaTanpaAkun() {
   }
 }
 
+let page = 1;
+let totalPage = 1;
+
 async function muatUser() {
-  const r = await api("/api/admin/users");
+  const p = new URLSearchParams({
+    q: document.getElementById("fQ").value.trim(),
+    page, per: Number(document.getElementById("fPer").value) || 25,
+  });
+  const r = await api("/api/admin/users?" + p.toString());
   if (!r.ok) return showMsg("msg", (r.data && r.data.error) || "Gagal memuat", "error");
   daftarUser = r.data.users;
+  page = r.data.page; totalPage = r.data.totalPage;
   const tb = document.querySelector("#tabelUser tbody");
-  tb.innerHTML = daftarUser.map(u => {
+  tb.innerHTML = daftarUser.length ? daftarUser.map(u => {
     const hub = u.role === "guru" ? esc(u.guru_nama || "-")
       : u.role === "siswa" ? esc((u.siswa_nama || "-") + (u.nis ? " (" + u.nis + ")" : ""))
       : "-";
@@ -101,7 +129,11 @@ async function muatUser() {
         <button class="btn small red" onclick="hapus(${u.id}, '${esc(u.username)}')">Hapus</button>
       </td>
     </tr>`;
-  }).join("");
+  }).join("") : '<tr><td colspan="4" class="muted">Tidak ada pengguna yang cocok.</td></tr>';
+  document.getElementById("infoPage").textContent =
+    `Halaman ${page} dari ${totalPage} — ${r.data.total} pengguna`;
+  document.getElementById("btnPrev").disabled = page <= 1;
+  document.getElementById("btnNext").disabled = page >= totalPage;
 }
 
 function mulaiEdit(id) {
@@ -166,10 +198,19 @@ async function hapus(id, username) {
     }
     if (r.ok) {
       showMsg("msg", id ? "Perubahan disimpan." : "Akun ditambahkan.", "ok");
-      resetForm(); muatUser(); muatSiswaTanpaAkun();
+      resetForm();
+      // Akun baru id-nya paling besar → tampilkan halaman terakhir daftar penuh.
+      if (!id) { document.getElementById("fQ").value = ""; page = 999999; }
+      muatUser(); muatSiswaTanpaAkun();
     } else showMsg("msg", (r.data && r.data.error) || "Gagal menyimpan", "error");
   });
   toggleFields();
+  document.getElementById("btnCari").addEventListener("click", () => { page = 1; muatUser(); });
+  document.getElementById("fQ").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); page = 1; muatUser(); } });
+  document.getElementById("btnResetCari").addEventListener("click", () => { document.getElementById("fQ").value = ""; page = 1; muatUser(); });
+  document.getElementById("fPer").addEventListener("change", () => { page = 1; muatUser(); });
+  document.getElementById("btnPrev").addEventListener("click", () => { if (page > 1) { page--; muatUser(); } });
+  document.getElementById("btnNext").addEventListener("click", () => { if (page < totalPage) { page++; muatUser(); } });
   await muatUser();
   await muatSiswaTanpaAkun();
 })();

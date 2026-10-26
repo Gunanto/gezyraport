@@ -10,18 +10,40 @@ admin.use(requireRole("admin"));
 /* ================= USERS ================= */
 
 admin.get("/users", (c) => {
-  const rows = db
-    .query(
-      `SELECT u.id, u.username, u.role, u.created_at,
+  const q = (c.req.query("q") || "").trim();
+  const sql = `SELECT u.id, u.username, u.role, u.created_at,
               g.id AS guru_id, g.nama AS guru_nama,
               s.id AS siswa_id, s.nama AS siswa_nama, s.nis
        FROM users u
        LEFT JOIN guru g ON g.user_id = u.id
-       LEFT JOIN siswa s ON s.user_id = u.id
-       ORDER BY u.id`
-    )
-    .all();
-  return c.json({ users: rows });
+       LEFT JOIN siswa s ON s.user_id = u.id`;
+  const params: any[] = [];
+  let where = "";
+  if (q) {
+    // Cari di username, nama guru, nama siswa, dan NIS. Karakter LIKE
+    // di-escape supaya "%" / "_" dari input tidak jadi wildcard.
+    const like = "%" + q.replace(/[\\%_]/g, (m) => "\\" + m) + "%";
+    where = ` WHERE u.username LIKE ? ESCAPE '\\'
+              OR g.nama LIKE ? ESCAPE '\\'
+              OR s.nama LIKE ? ESCAPE '\\'
+              OR s.nis LIKE ? ESCAPE '\\'`;
+    params.push(like, like, like, like);
+  }
+  // Pagination: ?page=1&per=25. Tanpa param page → semua (kompatibel pemanggil lama).
+  const page = Math.max(0, parseInt(c.req.query("page") || "0", 10) || 0);
+  if (!page) return c.json({ users: db.query(sql + where + " ORDER BY u.id").all(...params) });
+  const per = Math.min(100, Math.max(10, Number(c.req.query("per")) || 25));
+  const total = (
+    db.query(`SELECT COUNT(DISTINCT u.id) AS n FROM users u
+              LEFT JOIN guru g ON g.user_id = u.id
+              LEFT JOIN siswa s ON s.user_id = u.id ${where}`).get(...params) as any
+  ).n as number;
+  const totalPage = Math.max(1, Math.ceil(total / per));
+  const p = Math.min(page, totalPage);
+  const rows = db
+    .query(sql + where + " ORDER BY u.id LIMIT ? OFFSET ?")
+    .all(...params, per, (p - 1) * per);
+  return c.json({ users: rows, total, page: p, per, totalPage });
 });
 
 admin.post("/users", async (c) => {
