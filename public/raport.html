@@ -16,7 +16,6 @@
 </header>
 <main class="container">
   <div class="card">
-    <h2>📄 Raport Semester</h2>
     <div id="msg" class="alert hidden"></div>
     <div id="isiRaport"><p class="muted">Memuat...</p></div>
     <div class="toolbar no-print">
@@ -55,10 +54,10 @@ function ringkas(data) {
     ${kopHtml}
     <div class="judul-raport"><h3>${judulHtml}</h3></div>
     <table class="identitas">
-      <tr><td style="width:180px">Nama</td><td>: <b>${esc(id.nama)}</b></td></tr>
-      <tr><td>NIS</td><td>: ${esc(id.nis)}</td></tr>
-      <tr><td>Kelas</td><td>: ${esc(id.kelas || "-")}</td></tr>
-      <tr><td>Semester</td><td>: ${esc(id.semester)} — ${esc(id.tahun_ajaran)}</td></tr>
+      <tr><td>Nama</td><td style="width:10px">:</td><td><b>${esc(id.nama)}</b></td>
+          <td>Kelas</td><td style="width:10px">:</td><td>${esc(id.kelas || "-")}</td></tr>
+      <tr><td>NIS</td><td>:</td><td>${esc(id.nis)}</td>
+          <td>Semester</td><td>:</td><td>${esc(id.semester)} — ${esc(id.tahun_ajaran)}</td></tr>
     </table>
     <table class="data">
       <thead><tr><th>No</th><th>Mata Pelajaran</th><th>Nilai</th><th>Predikat</th></tr></thead>
