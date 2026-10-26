@@ -32,7 +32,28 @@ function ringkas(data) {
   const rata = terisi.length
     ? (terisi.reduce((a, b) => a + b.nilai, 0) / terisi.length).toFixed(2)
     : "-";
+  // Kop, judul, tempat/tanggal & tanda tangan — sama seperti template cetak
+  // (cetak.js), supaya tampilan layar siswa identik dengan dokumen resmi.
+  const ttd = data.ttd || {};
+  const tempat = ttd.tempat || ttd.kota || "";
+  const tanggalTeks = ttd.tanggal_teks || ttd.tanggal || "";
+  const kopHtml = data.sekolah.kop
+    ? `<div class="kop"><img src="${esc(data.sekolah.kop)}" alt="Kop raport" class="kop-img"></div>`
+    : `<div class="kop">
+    <h2>${esc(data.sekolah.nama || "SMP NEGERI 1 PUNGGUR")}</h2>
+    ${data.sekolah.alamat ? `<p>${esc(data.sekolah.alamat)}</p>` : ""}
+  </div>`;
+  const judulBaris = String(data.sekolah.judul || "")
+    .split(/\r?\n/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map(esc);
+  const judulHtml = judulBaris.length
+    ? judulBaris.join("<br>")
+    : "LAPORAN HASIL BELAJAR PESERTA DIDIK";
   return `
+    ${kopHtml}
+    <div class="judul-raport"><h3>${judulHtml}</h3></div>
     <table class="identitas">
       <tr><td style="width:180px">Nama</td><td>: <b>${esc(id.nama)}</b></td></tr>
       <tr><td>NIS</td><td>: ${esc(id.nis)}</td></tr>
@@ -51,7 +72,21 @@ function ringkas(data) {
     </table>
     <p><b>Rata-rata:</b> ${rata} <span class="muted">(${terisi.length} dari ${data.rows.length} mapel sudah ada nilainya)</span></p>
     <h3>Ketidakhadiran</h3>
-    <p>Sakit: <b>${data.kehadiran.sakit}</b> hari &nbsp;•&nbsp; Izin: <b>${data.kehadiran.izin}</b> hari &nbsp;•&nbsp; Tanpa keterangan: <b>${data.kehadiran.alpa}</b> hari</p>`;
+    <p>Sakit: <b>${data.kehadiran.sakit}</b> hari &nbsp;•&nbsp; Izin: <b>${data.kehadiran.izin}</b> hari &nbsp;•&nbsp; Tanpa keterangan: <b>${data.kehadiran.alpa}</b> hari</p>
+    <div class="ttd-tempat">${esc(tempat)}${tempat ? "," : ""} ${esc(tanggalTeks)}</div>
+    <div class="ttd">
+      <div class="kolom">Orang Tua/Wali<br><br><br>
+        <div class="nama">........................</div>
+      </div>
+      <div class="kolom">Wali Kelas<br><br><br>
+        <div class="nama">${esc(ttd.wali_nama || "........................")}</div>
+        ${ttd.wali_nip ? `NIP ${esc(ttd.wali_nip)}` : ""}
+      </div>
+      <div class="kolom">Kepala Sekolah<br><br><br>
+        <div class="nama">${esc(ttd.kepala_nama || "........................")}</div>
+        ${ttd.kepala_nip ? `NIP ${esc(ttd.kepala_nip)}` : ""}
+      </div>
+    </div>`;
 }
 (async () => {
   const user = await requireLogin();
