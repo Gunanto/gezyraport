@@ -34,6 +34,7 @@ function ringkas(data) {
   // Kop, judul, tempat/tanggal & tanda tangan — sama seperti template cetak
   // (cetak.js), supaya tampilan layar siswa identik dengan dokumen resmi.
   const ttd = data.ttd || {};
+  const cat = data.catatan || {};
   const tempat = ttd.tempat || ttd.kota || "";
   const tanggalTeks = ttd.tanggal_teks || ttd.tanggal || "";
   const kopHtml = data.sekolah.kop
@@ -69,6 +70,8 @@ function ringkas(data) {
         </tr>`).join("")}
       </tbody>
     </table>
+    <div class="catatan-box"><b>Catatan BK</b>${esc(cat.bk || "-")}</div>
+    <div class="catatan-box"><b>Catatan Wali Kelas</b>${esc(cat.wali || "-")}</div>
     <p><b>Rata-rata:</b> ${rata} <span class="muted">(${terisi.length} dari ${data.rows.length} mapel sudah ada nilainya)</span></p>
     <h3>Ketidakhadiran</h3>
     <p>Sakit: <b>${data.kehadiran.sakit}</b> hari &nbsp;•&nbsp; Izin: <b>${data.kehadiran.izin}</b> hari &nbsp;•&nbsp; Tanpa keterangan: <b>${data.kehadiran.alpa}</b> hari</p>
